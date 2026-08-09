@@ -28,6 +28,14 @@ jobs:
           AUTH_SECRET: ci-build-placeholder-not-a-real-secret
           DATABASE_URL: postgresql://user:pass@localhost:5432/db
           DIRECT_URL: postgresql://user:pass@localhost:5432/db
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Run end-to-end tests
+        run: npm run test:e2e
+        env:
+          AUTH_SECRET: ci-e2e-placeholder-not-a-real-secret
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+          DIRECT_URL: postgresql://user:pass@localhost:5432/db
       - name: Audit dependencies
         run: npm audit --audit-level=high
         continue-on-error: true
