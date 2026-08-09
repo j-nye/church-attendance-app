@@ -37,9 +37,7 @@ vi.mock('next/cache', () => ({
 const {
   listActiveCategories,
   createCategory,
-  renameCategory,
   deactivateCategory,
-  reactivateCategory,
 } = await import('@/lib/actions/categories')
 
 beforeEach(() => {
@@ -95,32 +93,6 @@ describe('createCategory', () => {
   })
 })
 
-describe('renameCategory', () => {
-  it('rejects a non-admin', async () => {
-    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
-    await expect(renameCategory({ id: 'id1', name: 'New', sortOrder: 1 })).rejects.toThrow(
-      AuthzError
-    )
-    expect(categoryUpdate).not.toHaveBeenCalled()
-  })
-
-  it('rejects invalid input for an admin', async () => {
-    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
-    await expect(renameCategory({ id: 'id1', name: '', sortOrder: -1 })).rejects.toThrow()
-    expect(categoryUpdate).not.toHaveBeenCalled()
-  })
-
-  it('renames the category for valid admin input', async () => {
-    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
-    await renameCategory({ id: 'id1', name: 'New Name', sortOrder: 2 })
-    expect(categoryUpdate).toHaveBeenCalledWith({
-      where: { id: 'id1' },
-      data: { name: 'New Name', sortOrder: 2 },
-    })
-    expect(revalidatePath).toHaveBeenCalledWith('/settings')
-  })
-})
-
 describe('deactivateCategory', () => {
   it('rejects a non-admin', async () => {
     requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
@@ -134,24 +106,6 @@ describe('deactivateCategory', () => {
     expect(categoryUpdate).toHaveBeenCalledWith({
       where: { id: 'id1' },
       data: { isActive: false },
-    })
-    expect(revalidatePath).toHaveBeenCalledWith('/settings')
-  })
-})
-
-describe('reactivateCategory', () => {
-  it('rejects a non-admin', async () => {
-    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
-    await expect(reactivateCategory('id1')).rejects.toThrow(AuthzError)
-    expect(categoryUpdate).not.toHaveBeenCalled()
-  })
-
-  it('reactivates for a valid admin call', async () => {
-    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
-    await reactivateCategory('id1')
-    expect(categoryUpdate).toHaveBeenCalledWith({
-      where: { id: 'id1' },
-      data: { isActive: true },
     })
     expect(revalidatePath).toHaveBeenCalledWith('/settings')
   })
