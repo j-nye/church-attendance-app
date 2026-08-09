@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  VOLUNTEER
+}
+
+enum CategoryType {
+  SECTION
+  CLASSROOM
+  SERVE_TEAM
+}
+
+/// Who may sign in. Authorization is read from this table on every mutation,
+/// so deactivating a row revokes access immediately — no waiting for a JWT to expire.
+model Allowlist {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  googleSub String?  @unique
+  role      Role     @default(VOLUNTEER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Event {
+  id          String             @id @default(cuid())
+  name        String
+  /// Church-local calendar date as YYYY-MM-DD. NOT a timestamp — see src/lib/dates.ts.
+  serviceDate String
+  isArchived  Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  records     AttendanceRecord[]
+
+  @@unique([serviceDate, name])
+  @@index([serviceDate])
+}
+
+model Category {
+  id        String             @id @default(cuid())
+  name      String
+  type      CategoryType
+  sortOrder Int                @default(0)
+  /// Key of a fixed region in the SVG sanctuary map. Null = appears in the list only.
+  svgKey    String?
+  isActive  Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  records   AttendanceRecord[]
+
+  @@unique([name, type])
+  @@index([type, sortOrder])
+}
+
+model AttendanceRecord {
+  id         String   @id @default(cuid())
+  eventId    String
+  categoryId String
+  count      Int
+  /// Email of the signed-in user, always derived server-side from the session.
+  recordedBy String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@unique([eventId, categoryId])
+  @@index([eventId])
+}
