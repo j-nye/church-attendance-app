@@ -5,6 +5,24 @@ import { saveCount } from '@/lib/actions/attendance'
 
 type Status = 'idle' | 'saving' | 'saved' | 'error'
 
+/**
+ * Resolve the count a dialog should open with: a local draft (an unsaved
+ * bump left behind by a refresh, a backgrounded tab, or a dead battery)
+ * takes priority over the server's `initialCount`, because the draft is
+ * strictly newer information — it only exists when a save never completed.
+ * A successful save always clears the draft (see `save()` below), so a
+ * leftover draft never outlives the count it represents.
+ */
+export function resolveInitialCount(rawDraft: string | null, initialCount: number): number {
+  if (rawDraft === null || rawDraft.trim() === '') return initialCount
+  const parsed = Number(rawDraft)
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : initialCount
+}
+
+export function draftKeyFor(eventId: string, categoryId: string): string {
+  return `draft:${eventId}:${categoryId}`
+}
+
 export function CounterDialog({
   eventId,
   categoryId,
@@ -20,10 +38,12 @@ export function CounterDialog({
   onClose: () => void
   onSaved: (count: number) => void
 }) {
-  const [count, setCount] = useState(initialCount)
-  const [status, setStatus] = useState<Status>('idle')
+  const draftKey = draftKeyFor(eventId, categoryId)
 
-  const draftKey = `draft:${eventId}:${categoryId}`
+  const [count, setCount] = useState(() =>
+    resolveInitialCount(typeof window === 'undefined' ? null : window.localStorage.getItem(draftKey), initialCount)
+  )
+  const [status, setStatus] = useState<Status>('idle')
 
   function bump(delta: number) {
     const next = Math.max(0, count + delta)
