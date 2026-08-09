@@ -1,0 +1,59 @@
+import { getEventSummary } from '@/lib/actions/attendance'
+import { PrintButton } from '@/components/PrintButton'
+import { formatServiceDate } from '@/lib/dates'
+
+const TYPE_LABELS: Record<string, string> = {
+  SECTION: 'Sanctuary',
+  CLASSROOM: 'Classrooms',
+  SERVE_TEAM: 'Serve Teams',
+}
+
+export default async function ReportPage({ params }: { params: Promise<{ eventId: string }> }) {
+  const { eventId } = await params
+  const { event, rows, totals } = await getEventSummary(eventId)
+
+  return (
+    <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 style={{ fontSize: 'var(--text-xl)', marginBottom: 0 }}>{event.name}</h1>
+          <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>{formatServiceDate(event.serviceDate)}</p>
+        </div>
+        <PrintButton />
+      </div>
+
+      {(['SECTION', 'CLASSROOM', 'SERVE_TEAM'] as const).map((type) => {
+        const group = rows.filter((row) => row.type === type)
+        if (group.length === 0) return null
+        return (
+          <section key={type} className="card report-group" style={{ marginBottom: 'var(--space-4)' }}>
+            <h2 style={{ marginTop: 0, fontSize: 'var(--text-lg)' }}>{TYPE_LABELS[type]}</h2>
+            <table>
+              <tbody>
+                {group.map((row) => (
+                  <tr key={row.categoryId}>
+                    <td>{row.name}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{row.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )
+      })}
+
+      <section className="card report-group">
+        <table>
+          <tbody>
+            <tr><td>Sanctuary</td><td style={{ textAlign: 'right' }}>{totals.sanctuary}</td></tr>
+            <tr><td>Classrooms</td><td style={{ textAlign: 'right' }}>{totals.classrooms}</td></tr>
+            <tr><td>Serve Teams</td><td style={{ textAlign: 'right' }}>{totals.serveTeams}</td></tr>
+            <tr style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>
+              <td>Total</td><td style={{ textAlign: 'right' }}>{totals.grand}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  )
+}
