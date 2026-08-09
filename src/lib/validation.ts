@@ -1,0 +1,59 @@
+import { z } from 'zod'
+
+export const CATEGORY_NAME_MAX = 60
+export const EVENT_NAME_MAX = 80
+export const MAX_COUNT = 100_000
+
+/** cuid-shaped identifier. Existence is checked against the DB in the action. */
+export const idSchema = z.string().trim().min(1).max(40)
+
+export const categoryTypeSchema = z.enum(['SECTION', 'CLASSROOM', 'SERVE_TEAM'])
+export const roleSchema = z.enum(['ADMIN', 'VOLUNTEER'])
+
+const serviceDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Service date must be YYYY-MM-DD')
+  .refine((value) => {
+    const [year, month, day] = value.split('-').map(Number)
+    const parsed = new Date(Date.UTC(year, month - 1, day))
+    return (
+      parsed.getUTCFullYear() === year &&
+      parsed.getUTCMonth() === month - 1 &&
+      parsed.getUTCDate() === day
+    )
+  }, 'Service date is not a real calendar date')
+
+export const saveCountSchema = z.object({
+  eventId: idSchema,
+  categoryId: idSchema,
+  count: z.number().int().min(0).max(MAX_COUNT),
+})
+
+export const createCategorySchema = z.object({
+  name: z.string().trim().min(1).max(CATEGORY_NAME_MAX),
+  type: categoryTypeSchema,
+  svgKey: z.string().trim().max(40).nullable().default(null),
+})
+
+export const updateCategorySchema = z.object({
+  id: idSchema,
+  name: z.string().trim().min(1).max(CATEGORY_NAME_MAX),
+  sortOrder: z.number().int().min(0).max(999),
+})
+
+export const createEventSchema = z.object({
+  name: z.string().trim().min(1).max(EVENT_NAME_MAX),
+  serviceDate: serviceDateSchema,
+})
+
+export const allowlistEntrySchema = z.object({
+  // Zod 4 deprecated method-style `z.string().email()` in favor of top-level `z.email()`.
+  // Transform and length-check as a string first, then pipe into the email validator.
+  email: z.string().trim().toLowerCase().max(254).pipe(z.email()),
+  role: roleSchema,
+})
+
+export type SaveCountInput = z.infer<typeof saveCountSchema>
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>
+export type CreateEventInput = z.infer<typeof createEventSchema>
+export type AllowlistEntryInput = z.infer<typeof allowlistEntrySchema>
