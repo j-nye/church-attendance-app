@@ -1,10 +1,7 @@
-export default function Home() {
-  return (
-    <main>
-      <div className="card">
-        <h1>Church Attendance</h1>
-        <p>Sunday attendance tracking.</p>
-      </div>
-    </main>
-  );
+import { redirect } from 'next/navigation'
+import { auth } from '@/lib/auth'
+
+export default async function HomePage() {
+  const session = await auth()
+  redirect(session?.user?.email ? '/dashboard' : '/login')
 }
