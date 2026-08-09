@@ -1,0 +1,5 @@
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --verbose
+else
+  echo "WARNING: gitleaks not installed locally — CI will still scan. Install: winget install gitleaks"
+fi
