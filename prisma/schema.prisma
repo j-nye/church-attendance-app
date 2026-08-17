@@ -16,7 +16,9 @@ enum Role {
 enum CategoryType {
   SECTION
   CLASSROOM
+  GROWTH_TRACK
   SERVE_TEAM
+  SERVICE_METRIC
 }
 
 /// Who may sign in. Authorization is read from this table on every mutation,
@@ -45,15 +47,20 @@ model Event {
 }
 
 model Category {
-  id        String             @id @default(cuid())
-  name      String
-  type      CategoryType
-  sortOrder Int                @default(0)
+  id                String             @id @default(cuid())
+  name              String
+  type              CategoryType
+  sortOrder         Int                @default(0)
   /// Key of a fixed region in the SVG sanctuary map. Null = appears in the list only.
-  svgKey    String?
-  isActive  Boolean            @default(true)
-  createdAt DateTime           @default(now())
-  records   AttendanceRecord[]
+  svgKey            String?
+  /// Whether this category's count is included in the report's Total Attendance.
+  /// False for ministry metrics (Salvations, Connection Cards, Welcome Packs) that
+  /// track something other than a headcount and would double-count people already
+  /// counted elsewhere.
+  countsTowardTotal Boolean            @default(true)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  records           AttendanceRecord[]
 
   @@unique([name, type])
   @@index([type, sortOrder])

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   saveCountSchema,
+  categoryTypeSchema,
   createCategorySchema,
   createEventSchema,
   allowlistEntrySchema,
@@ -48,6 +49,31 @@ describe('createCategorySchema', () => {
 
   it('rejects an unknown category type', () => {
     expect(() => createCategorySchema.parse({ name: 'Foyer', type: 'PARKING_LOT', svgKey: null })).toThrow()
+  })
+})
+
+describe('categoryTypeSchema', () => {
+  it('accepts all five category types', () => {
+    for (const type of ['SECTION', 'CLASSROOM', 'GROWTH_TRACK', 'SERVE_TEAM', 'SERVICE_METRIC']) {
+      expect(categoryTypeSchema.parse(type)).toBe(type)
+    }
+  })
+})
+
+describe('createCategorySchema — countsTowardTotal', () => {
+  it('defaults countsTowardTotal to true when omitted', () => {
+    const result = createCategorySchema.parse({ name: 'Left Wing', type: 'SECTION', svgKey: null })
+    expect(result.countsTowardTotal).toBe(true)
+  })
+
+  it('accepts an explicit countsTowardTotal of false', () => {
+    const result = createCategorySchema.parse({
+      name: 'Salvations',
+      type: 'SERVICE_METRIC',
+      svgKey: null,
+      countsTowardTotal: false,
+    })
+    expect(result.countsTowardTotal).toBe(false)
   })
 })
 

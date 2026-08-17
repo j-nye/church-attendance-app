@@ -7,7 +7,13 @@ export const MAX_COUNT = 100_000
 /** cuid-shaped identifier. Existence is checked against the DB in the action. */
 export const idSchema = z.string().trim().min(1).max(40)
 
-export const categoryTypeSchema = z.enum(['SECTION', 'CLASSROOM', 'SERVE_TEAM'])
+export const categoryTypeSchema = z.enum([
+  'SECTION',
+  'CLASSROOM',
+  'GROWTH_TRACK',
+  'SERVE_TEAM',
+  'SERVICE_METRIC',
+])
 export const roleSchema = z.enum(['ADMIN', 'VOLUNTEER'])
 
 const serviceDateSchema = z
@@ -33,6 +39,7 @@ export const createCategorySchema = z.object({
   name: z.string().trim().min(1).max(CATEGORY_NAME_MAX),
   type: categoryTypeSchema,
   svgKey: z.string().trim().max(40).nullable().default(null),
+  countsTowardTotal: z.boolean().default(true),
 })
 
 export const updateCategorySchema = z.object({
