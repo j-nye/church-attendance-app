@@ -1,21 +1,22 @@
 :root {
-  --color-bg: #0f1115;
-  --color-surface: #181b22;
-  --color-surface-raised: #21252e;
-  --color-border: #2c313c;
-  --color-text: #eef1f6;
-  --color-text-muted: #9aa3b2;
-  --color-accent: #c9a227;
-  --color-accent-contrast: #1a1408;
-  --color-danger: #e05252;
-  --color-success: #4fb477;
+  --color-bg: #F7F8FA;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #F0F2F5;
+  --color-border: #D5D9E0;
+  --color-text: #14161A;
+  --color-text-muted: #4A505C;
+  --color-accent: #0072B2;
+  --color-accent-contrast: #FFFFFF;
+  --color-danger: #D55E00;
+  --color-success: #009E73;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.25rem;
-  --text-xl: 1.75rem;
-  --text-2xl: 2.25rem;
+  --text-sm: 1rem;
+  --text-base: 1.125rem;
+  --text-lg: 1.375rem;
+  --text-xl: 2rem;
+  --text-2xl: 2.75rem;
+  --text-3xl: 3.5rem;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -26,9 +27,25 @@
 
   --radius: 12px;
   --radius-lg: 20px;
-  --shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  --shadow: 0 8px 24px rgb(0 0 0 / 0.12);
   --transition: 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   /* Minimum accessible touch target — volunteers use phones in dim rooms. */
   --tap-target: 44px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0F1115;
+    --color-surface: #181B22;
+    --color-surface-raised: #21252E;
+    --color-border: #3A4150;
+    --color-text: #F5F7FA;
+    --color-text-muted: #B8C0CC;
+    --color-accent: #56B4E9;
+    --color-accent-contrast: #05121C;
+    --color-danger: #FF8A3D;
+    --color-success: #33D6A6;
+    --shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  }
 }
