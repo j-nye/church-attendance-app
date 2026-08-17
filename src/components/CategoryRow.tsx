@@ -4,10 +4,12 @@ export function CategoryRow({
   name,
   count,
   onSelect,
+  dashed = false,
 }: {
   name: string
   count: number | undefined
   onSelect: () => void
+  dashed?: boolean
 }) {
   return (
     <button
@@ -16,6 +18,7 @@ export function CategoryRow({
       style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         width: '100%', padding: 'var(--space-3) var(--space-4)', marginBottom: 'var(--space-2)',
+        borderStyle: dashed ? 'dashed' : 'solid',
       }}
     >
       <span>{name}</span>
