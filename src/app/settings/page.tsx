@@ -27,6 +27,7 @@ export default async function SettingsPage() {
               name: formData.get('name'),
               type: formData.get('type'),
               svgKey: (formData.get('svgKey') as string) || null,
+              countsTowardTotal: formData.get('countsTowardTotal') === 'on',
             })
           }}
           style={{ display: 'grid', gap: 'var(--space-3)' }}
@@ -35,7 +36,9 @@ export default async function SettingsPage() {
           <select name="type" required style={{ padding: 'var(--space-3)' }}>
             <option value="SECTION">Sanctuary section</option>
             <option value="CLASSROOM">Classroom</option>
+            <option value="GROWTH_TRACK">Growth Track</option>
             <option value="SERVE_TEAM">Serve team</option>
+            <option value="SERVICE_METRIC">Ministry metric</option>
           </select>
           <select name="svgKey" style={{ padding: 'var(--space-3)' }}>
             <option value="">Not on the map (shows in the list)</option>
@@ -43,6 +46,10 @@ export default async function SettingsPage() {
               <option key={region.key} value={region.key}>{region.label}</option>
             ))}
           </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <input type="checkbox" name="countsTowardTotal" defaultChecked />
+            Counts toward Total Attendance
+          </label>
           <button type="submit">Add category</button>
         </form>
         <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>

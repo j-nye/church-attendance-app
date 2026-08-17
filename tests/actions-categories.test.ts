@@ -87,9 +87,18 @@ describe('createCategory', () => {
     const result = await createCategory({ name: 'Nursery', type: 'CLASSROOM' })
     expect(result).toEqual({ id: '1' })
     expect(categoryCreate).toHaveBeenCalledWith({
-      data: { name: 'Nursery', type: 'CLASSROOM', svgKey: null },
+      data: { name: 'Nursery', type: 'CLASSROOM', svgKey: null, countsTowardTotal: true },
     })
     expect(revalidatePath).toHaveBeenCalledWith('/settings')
+  })
+
+  it('passes an explicit countsTowardTotal: false through to the create call', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryCreate.mockResolvedValue({ id: '2' })
+    await createCategory({ name: 'Salvations', type: 'SERVICE_METRIC', countsTowardTotal: false })
+    expect(categoryCreate).toHaveBeenCalledWith({
+      data: { name: 'Salvations', type: 'SERVICE_METRIC', svgKey: null, countsTowardTotal: false },
+    })
   })
 })
 
