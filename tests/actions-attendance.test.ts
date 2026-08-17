@@ -212,14 +212,21 @@ describe('getEventSummary', () => {
         count: 100,
         recordedBy: 'vol@example.com',
         updatedAt: new Date('2026-08-09T10:00:00Z'),
-        category: { name: 'Main Hall', type: 'SECTION', sortOrder: 0 },
+        category: { name: 'Main Hall', type: 'SECTION', sortOrder: 0, countsTowardTotal: true },
       },
       {
         categoryId: 'c2',
         count: 20,
         recordedBy: 'vol2@example.com',
         updatedAt: new Date('2026-08-09T10:05:00Z'),
-        category: { name: 'Kids Room', type: 'CLASSROOM', sortOrder: 1 },
+        category: { name: 'Kids Room', type: 'CLASSROOM', sortOrder: 1, countsTowardTotal: true },
+      },
+      {
+        categoryId: 'c3',
+        count: 5,
+        recordedBy: 'vol@example.com',
+        updatedAt: new Date('2026-08-09T10:10:00Z'),
+        category: { name: 'Salvations', type: 'SERVICE_METRIC', sortOrder: 2, countsTowardTotal: false },
       },
     ],
   }
@@ -249,14 +256,16 @@ describe('getEventSummary', () => {
     expect(result.rows.find((row) => row.categoryId === 'c1')?.recordedBy).toBe('vol@example.com')
   })
 
-  it('computes totals by category type and a grand total', async () => {
+  it('computes totals by category type and a grand total that excludes categories with countsTowardTotal: false', async () => {
     requireUser.mockResolvedValue(ADMIN)
     eventFindUnique.mockResolvedValue(baseEvent)
     const result = await getEventSummary('e1')
     expect(result.totals).toEqual({
       sanctuary: 100,
       classrooms: 20,
+      growthTrack: 0,
       serveTeams: 0,
+      // 120, not 125 — the Salvations record (a ministry metric) is excluded.
       grand: 120,
     })
   })

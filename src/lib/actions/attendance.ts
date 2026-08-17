@@ -72,14 +72,21 @@ export async function getEventSummary(eventId: string) {
   const totalBy = (type: string) =>
     rows.filter((row) => row.type === type).reduce((sum, row) => sum + row.count, 0)
 
+  // Grand total only includes categories marked as real headcounts — a
+  // ministry metric like Salvations must never inflate attendance.
+  const grand = event.records
+    .filter((record) => record.category.countsTowardTotal)
+    .reduce((sum, record) => sum + record.count, 0)
+
   return {
     event: { id: event.id, name: event.name, serviceDate: event.serviceDate },
     rows,
     totals: {
       sanctuary: totalBy('SECTION'),
       classrooms: totalBy('CLASSROOM'),
+      growthTrack: totalBy('GROWTH_TRACK'),
       serveTeams: totalBy('SERVE_TEAM'),
-      grand: rows.reduce((sum, row) => sum + row.count, 0),
+      grand,
     },
   }
 }
