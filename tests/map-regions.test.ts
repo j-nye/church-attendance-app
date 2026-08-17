@@ -27,4 +27,14 @@ describe('MAP_REGIONS', () => {
       expect(region.y + region.height).toBeLessThanOrEqual(420)
     }
   })
+
+  it('has exactly the 5 regions the sanctuary map design calls for, in map order', () => {
+    expect(MAP_REGIONS.map((region) => region.key)).toEqual([
+      'stage',
+      'left-wing',
+      'center-left',
+      'center-right',
+      'right-wing',
+    ])
+  })
 })
