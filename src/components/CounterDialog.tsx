@@ -81,7 +81,7 @@ export function CounterDialog({
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-4)' }}>
           <button onClick={() => bump(-1)} aria-label="Decrease count" style={{ width: 64, height: 64, fontSize: 28 }}>−</button>
-          <output style={{ fontSize: '3rem', fontWeight: 700, minWidth: '4rem' }} aria-live="polite">{count}</output>
+          <output style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, minWidth: '4rem' }} aria-live="polite">{count}</output>
           <button onClick={() => bump(1)} aria-label="Increase count" style={{ width: 64, height: 64, fontSize: 28 }}>+</button>
         </div>
 
@@ -92,7 +92,11 @@ export function CounterDialog({
         </div>
 
         {status === 'error' && (
-          <p role="alert" style={{ color: 'var(--color-danger)' }}>
+          <p
+            role="alert"
+            style={{ color: 'var(--color-danger)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+          >
+            <span aria-hidden="true">⚠</span>
             Could not save — your count is still here. Check your signal and tap Save again.
           </p>
         )}
