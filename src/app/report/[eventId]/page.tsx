@@ -5,7 +5,9 @@ import { formatServiceDate } from '@/lib/dates'
 const TYPE_LABELS: Record<string, string> = {
   SECTION: 'Sanctuary',
   CLASSROOM: 'Classrooms',
+  GROWTH_TRACK: 'Growth Track',
   SERVE_TEAM: 'Serve Teams',
+  SERVICE_METRIC: 'Ministry Metrics',
 }
 
 export default async function ReportPage({ params }: { params: Promise<{ eventId: string }> }) {
@@ -22,7 +24,7 @@ export default async function ReportPage({ params }: { params: Promise<{ eventId
         <PrintButton />
       </div>
 
-      {(['SECTION', 'CLASSROOM', 'SERVE_TEAM'] as const).map((type) => {
+      {(['SECTION', 'CLASSROOM', 'GROWTH_TRACK', 'SERVE_TEAM', 'SERVICE_METRIC'] as const).map((type) => {
         const group = rows.filter((row) => row.type === type)
         if (group.length === 0) return null
         return (
@@ -47,6 +49,7 @@ export default async function ReportPage({ params }: { params: Promise<{ eventId
           <tbody>
             <tr><td>Sanctuary</td><td style={{ textAlign: 'right' }}>{totals.sanctuary}</td></tr>
             <tr><td>Classrooms</td><td style={{ textAlign: 'right' }}>{totals.classrooms}</td></tr>
+            <tr><td>Growth Track</td><td style={{ textAlign: 'right' }}>{totals.growthTrack}</td></tr>
             <tr><td>Serve Teams</td><td style={{ textAlign: 'right' }}>{totals.serveTeams}</td></tr>
             <tr style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>
               <td>Total</td><td style={{ textAlign: 'right' }}>{totals.grand}</td>
