@@ -31,6 +31,27 @@ describe.skipIf(!hasDatabase)('seedCategories (live database)', () => {
     expect(activeCount).toBe(DEFAULT_CATEGORIES.length)
   })
 
+  it('corrects sortOrder on re-seed when a category already existed with a stale value', async () => {
+    // Force Left Wing's sortOrder into a wrong state first, so the assertion
+    // below actually proves seedCategories() is what fixed it — not that it
+    // was already correct.
+    await prisma.category.upsert({
+      where: { name_type: { name: 'Left Wing', type: 'SECTION' } },
+      update: { sortOrder: 999 },
+      create: { name: 'Left Wing', type: 'SECTION', svgKey: 'left-wing', sortOrder: 999, isActive: true },
+    })
+
+    await seedCategories()
+
+    const leftWing = await prisma.category.findUniqueOrThrow({
+      where: { name_type: { name: 'Left Wing', type: 'SECTION' } },
+    })
+    const expectedIndex = DEFAULT_CATEGORIES.findIndex(
+      (c) => c.name === 'Left Wing' && c.type === 'SECTION'
+    )
+    expect(leftWing.sortOrder).toBe(expectedIndex)
+  })
+
   it('sets countsTowardTotal correctly for a headcount category vs. a ministry metric', async () => {
     await seedCategories()
 

@@ -59,7 +59,12 @@ export async function seedCategories() {
   for (const [index, category] of DEFAULT_CATEGORIES.entries()) {
     await prisma.category.upsert({
       where: { name_type: { name: category.name, type: category.type } },
-      update: { isActive: true },
+      update: {
+        isActive: true,
+        sortOrder: index,
+        svgKey: category.svgKey,
+        countsTowardTotal: category.countsTowardTotal ?? true,
+      },
       create: { ...category, sortOrder: index },
     })
   }
