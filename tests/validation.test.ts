@@ -6,6 +6,7 @@ import {
   createEventSchema,
   allowlistEntrySchema,
   CATEGORY_NAME_MAX,
+  serviceDateSchema,
 } from '@/lib/validation'
 
 describe('saveCountSchema', () => {
@@ -102,5 +103,19 @@ describe('allowlistEntrySchema', () => {
 
   it('rejects a malformed email', () => {
     expect(() => allowlistEntrySchema.parse({ email: 'not-an-email', role: 'ADMIN' })).toThrow()
+  })
+})
+
+describe('serviceDateSchema', () => {
+  it('accepts a real YYYY-MM-DD date', () => {
+    expect(serviceDateSchema.parse('2026-08-16')).toBe('2026-08-16')
+  })
+
+  it('rejects a non-calendar date', () => {
+    expect(() => serviceDateSchema.parse('2026-02-30')).toThrow()
+  })
+
+  it('rejects a timestamp', () => {
+    expect(() => serviceDateSchema.parse('2026-08-16T00:00:00Z')).toThrow()
   })
 })

@@ -16,7 +16,7 @@ export const categoryTypeSchema = z.enum([
 ])
 export const roleSchema = z.enum(['ADMIN', 'VOLUNTEER'])
 
-const serviceDateSchema = z
+export const serviceDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Service date must be YYYY-MM-DD')
   .refine((value) => {

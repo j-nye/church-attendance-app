@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, requireUser } from '@/lib/authz'
-import { createEventSchema, idSchema } from '@/lib/validation'
+import { createEventSchema, serviceDateSchema, idSchema } from '@/lib/validation'
 import { todayServiceDate, formatServiceDate } from '@/lib/dates'
 
 export async function listEvents() {
@@ -50,4 +50,21 @@ export async function getOrCreateTodayEvent() {
   const event = await prisma.event.create({ data: { name, serviceDate } })
   revalidatePath('/dashboard')
   return event
+}
+
+/**
+ * Events whose serviceDate falls within [start, end], inclusive. Includes
+ * archived events — an export is a historical record, and archiving isn't
+ * deletion.
+ */
+export async function listEventsInRange(start: string, end: string) {
+  await requireAdmin()
+  const startDate = serviceDateSchema.parse(start)
+  const endDate = serviceDateSchema.parse(end)
+  if (startDate > endDate) throw new Error('start must not be after end')
+
+  return prisma.event.findMany({
+    where: { serviceDate: { gte: startDate, lte: endDate } },
+    orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
+  })
 }

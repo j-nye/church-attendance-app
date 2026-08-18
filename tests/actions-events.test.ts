@@ -36,7 +36,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
-const { listEvents, createEvent, archiveEvent, getOrCreateTodayEvent } = await import(
+const { listEvents, createEvent, archiveEvent, getOrCreateTodayEvent, listEventsInRange } = await import(
   '@/lib/actions/events'
 )
 
@@ -142,5 +142,45 @@ describe('getOrCreateTodayEvent', () => {
     expect(result).toEqual({ id: 'new' })
     expect(eventCreate).toHaveBeenCalled()
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+  })
+})
+
+describe('listEventsInRange', () => {
+  it('requires an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(listEventsInRange('2026-08-01', '2026-08-31')).rejects.toThrow(AuthzError)
+    expect(eventFindMany).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed start date before querying', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    await expect(listEventsInRange('not-a-date', '2026-08-31')).rejects.toThrow()
+    expect(eventFindMany).not.toHaveBeenCalled()
+  })
+
+  it('rejects a reversed range before querying', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    await expect(listEventsInRange('2026-08-31', '2026-08-01')).rejects.toThrow(
+      'start must not be after end'
+    )
+    expect(eventFindMany).not.toHaveBeenCalled()
+  })
+
+  it('queries events with serviceDate between start and end, inclusive, ordered by date then name', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindMany.mockResolvedValue([{ id: 'e1' }])
+    const result = await listEventsInRange('2026-08-01', '2026-08-31')
+    expect(result).toEqual([{ id: 'e1' }])
+    expect(eventFindMany).toHaveBeenCalledWith({
+      where: { serviceDate: { gte: '2026-08-01', lte: '2026-08-31' } },
+      orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
+    })
+  })
+
+  it('returns an empty array for a range that matches no events', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindMany.mockResolvedValue([])
+    const result = await listEventsInRange('2020-01-01', '2020-01-31')
+    expect(result).toEqual([])
   })
 })
