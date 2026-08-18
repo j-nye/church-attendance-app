@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const requireUser = vi.fn()
+const requireAdmin = vi.fn()
 const revalidatePath = vi.fn()
 
 const eventFindUnique = vi.fn()
+const eventFindMany = vi.fn()
 const categoryFindUnique = vi.fn()
 const attendanceUpsert = vi.fn()
 const attendanceFindMany = vi.fn()
@@ -16,6 +18,7 @@ class AuthzError extends Error {
 
 vi.mock('@/lib/authz', () => ({
   requireUser: (...args: unknown[]) => requireUser(...args),
+  requireAdmin: (...args: unknown[]) => requireAdmin(...args),
   AuthzError,
 }))
 
@@ -23,6 +26,7 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     event: {
       findUnique: (...args: unknown[]) => eventFindUnique(...args),
+      findMany: (...args: unknown[]) => eventFindMany(...args),
     },
     category: {
       findUnique: (...args: unknown[]) => categoryFindUnique(...args),
@@ -38,15 +42,17 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
-const { saveCount, getEventCounts, getEventSummary } = await import('@/lib/actions/attendance')
+const { saveCount, getEventCounts, getEventSummary, getExportRows } = await import('@/lib/actions/attendance')
 
 const VOLUNTEER = { email: 'vol@example.com', role: 'VOLUNTEER' as const }
 const ADMIN = { email: 'admin@example.com', role: 'ADMIN' as const }
 
 beforeEach(() => {
   requireUser.mockReset()
+  requireAdmin.mockReset()
   revalidatePath.mockReset()
   eventFindUnique.mockReset()
+  eventFindMany.mockReset()
   categoryFindUnique.mockReset()
   attendanceUpsert.mockReset()
   attendanceFindMany.mockReset()
@@ -267,6 +273,90 @@ describe('getEventSummary', () => {
       serveTeams: 0,
       // 120, not 125 — the Salvations record (a ministry metric) is excluded.
       grand: 120,
+    })
+  })
+})
+
+describe('getExportRows', () => {
+  it('requires an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(getExportRows(['e1'])).rejects.toThrow(AuthzError)
+    expect(eventFindMany).not.toHaveBeenCalled()
+  })
+
+  it('returns an empty array without querying when given no event ids', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    const result = await getExportRows([])
+    expect(result).toEqual([])
+    expect(eventFindMany).not.toHaveBeenCalled()
+  })
+
+  it('flattens multiple events into one row array with the full 9-field shape', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindMany.mockResolvedValue([
+      {
+        id: 'e1',
+        name: 'Sunday Service',
+        serviceDate: '2026-08-09',
+        isArchived: false,
+        records: [
+          {
+            count: 10,
+            recordedBy: 'vol@example.com',
+            category: { type: 'SECTION', name: 'Left Wing', countsTowardTotal: true },
+          },
+        ],
+      },
+      {
+        id: 'e2',
+        name: 'Sunday Service',
+        serviceDate: '2026-08-16',
+        isArchived: true,
+        records: [
+          {
+            count: 2,
+            recordedBy: 'vol2@example.com',
+            category: { type: 'SERVICE_METRIC', name: 'Salvations', countsTowardTotal: false },
+          },
+        ],
+      },
+    ])
+
+    const result = await getExportRows(['e1', 'e2'])
+
+    expect(result).toEqual([
+      {
+        serviceDate: '2026-08-09',
+        serviceName: 'Sunday Service',
+        archived: false,
+        categoryType: 'SECTION',
+        group: 'Sanctuary',
+        categoryName: 'Left Wing',
+        count: 10,
+        countsTowardTotal: true,
+        recordedBy: 'vol@example.com',
+      },
+      {
+        serviceDate: '2026-08-16',
+        serviceName: 'Sunday Service',
+        archived: true,
+        categoryType: 'SERVICE_METRIC',
+        group: 'Ministry Metrics',
+        categoryName: 'Salvations',
+        count: 2,
+        countsTowardTotal: false,
+        recordedBy: 'vol2@example.com',
+      },
+    ])
+    expect(eventFindMany).toHaveBeenCalledWith({
+      where: { id: { in: ['e1', 'e2'] } },
+      include: {
+        records: {
+          include: { category: true },
+          orderBy: [{ category: { sortOrder: 'asc' } }, { category: { name: 'asc' } }],
+        },
+      },
+      orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
     })
   })
 })

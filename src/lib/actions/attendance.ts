@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
-import { requireUser } from '@/lib/authz'
+import { requireUser, requireAdmin } from '@/lib/authz'
 import { saveCountSchema, idSchema } from '@/lib/validation'
+import { TYPE_LABELS } from '@/lib/category-labels'
 
 /**
  * Record or correct a headcount. Exactly one row exists per (event, category),
@@ -92,4 +93,52 @@ export async function getEventSummary(eventId: string) {
       grand,
     },
   }
+}
+
+export type ExportRow = {
+  serviceDate: string
+  serviceName: string
+  archived: boolean
+  categoryType: string
+  group: string
+  categoryName: string
+  count: number
+  countsTowardTotal: boolean
+  recordedBy: string
+}
+
+/**
+ * Flattened (event, category) rows for CSV export, across any number of
+ * events. Always includes recordedBy unconditionally — unlike
+ * getEventSummary's per-row masking, this whole endpoint is admin-only end
+ * to end, so there's no volunteer-facing view of this data to protect.
+ */
+export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
+  await requireAdmin()
+  if (eventIds.length === 0) return []
+
+  const events = await prisma.event.findMany({
+    where: { id: { in: eventIds } },
+    include: {
+      records: {
+        include: { category: true },
+        orderBy: [{ category: { sortOrder: 'asc' } }, { category: { name: 'asc' } }],
+      },
+    },
+    orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
+  })
+
+  return events.flatMap((event) =>
+    event.records.map((record) => ({
+      serviceDate: event.serviceDate,
+      serviceName: event.name,
+      archived: event.isArchived,
+      categoryType: record.category.type,
+      group: TYPE_LABELS[record.category.type] ?? record.category.type,
+      categoryName: record.category.name,
+      count: record.count,
+      countsTowardTotal: record.category.countsTowardTotal,
+      recordedBy: record.recordedBy,
+    }))
+  )
 }

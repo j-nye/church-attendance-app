@@ -1,14 +1,7 @@
 import { getEventSummary } from '@/lib/actions/attendance'
 import { PrintButton } from '@/components/PrintButton'
 import { formatServiceDate } from '@/lib/dates'
-
-const TYPE_LABELS: Record<string, string> = {
-  SECTION: 'Sanctuary',
-  CLASSROOM: 'Classrooms',
-  GROWTH_TRACK: 'Growth Track',
-  SERVE_TEAM: 'Serve Teams',
-  SERVICE_METRIC: 'Ministry Metrics',
-}
+import { TYPE_LABELS } from '@/lib/category-labels'
 
 export default async function ReportPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params
