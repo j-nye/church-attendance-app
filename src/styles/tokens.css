@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --color-bg: #F7F8FA;
   --color-surface: #FFFFFF;
   --color-surface-raised: #F0F2F5;
@@ -7,8 +8,8 @@
   --color-text-muted: #4A505C;
   --color-accent: #0072B2;
   --color-accent-contrast: #FFFFFF;
-  --color-danger: #D55E00;
-  --color-success: #009E73;
+  --color-danger: #B34700;
+  --color-success: #00785A;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --text-sm: 1rem;
@@ -36,6 +37,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --color-bg: #0F1115;
     --color-surface: #181B22;
     --color-surface-raised: #21252E;
