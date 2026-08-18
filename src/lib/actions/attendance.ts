@@ -55,7 +55,10 @@ export async function getEventSummary(eventId: string) {
   const event = await prisma.event.findUnique({
     where: { id },
     include: {
-      records: { include: { category: true }, orderBy: { category: { sortOrder: 'asc' } } },
+      records: {
+        include: { category: true },
+        orderBy: [{ category: { sortOrder: 'asc' } }, { category: { name: 'asc' } }],
+      },
     },
   })
   if (!event) throw new Error('No such service')
