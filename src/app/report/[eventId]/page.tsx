@@ -2,10 +2,11 @@ import { getEventSummary } from '@/lib/actions/attendance'
 import { PrintButton } from '@/components/PrintButton'
 import { formatServiceDate } from '@/lib/dates'
 import { TYPE_LABELS } from '@/lib/category-labels'
+import { requireUser } from '@/lib/authz'
 
 export default async function ReportPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params
-  const { event, rows, totals } = await getEventSummary(eventId)
+  const [user, { event, rows, totals }] = await Promise.all([requireUser(), getEventSummary(eventId)])
 
   return (
     <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
@@ -14,7 +15,22 @@ export default async function ReportPage({ params }: { params: Promise<{ eventId
           <h1 style={{ fontSize: 'var(--text-xl)', marginBottom: 0 }}>{event.name}</h1>
           <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>{formatServiceDate(event.serviceDate)}</p>
         </div>
-        <PrintButton />
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          {user.role === 'ADMIN' && (
+            <a
+              href={`/api/export?eventId=${eventId}`}
+              className="no-print"
+              style={{
+                display: 'inline-flex', alignItems: 'center', padding: '0 var(--space-4)',
+                border: '1px solid var(--color-border)', borderRadius: 'var(--radius)',
+                color: 'var(--color-text)', textDecoration: 'none',
+              }}
+            >
+              Download CSV
+            </a>
+          )}
+          <PrintButton />
+        </div>
       </div>
 
       {(['SECTION', 'CLASSROOM', 'GROWTH_TRACK', 'SERVE_TEAM', 'SERVICE_METRIC'] as const).map((type) => {

@@ -110,6 +110,25 @@ export default async function SettingsPage() {
           Revoking takes effect immediately — the next action that person attempts is refused.
         </p>
       </section>
+
+      <section className="card" style={{ marginTop: 'var(--space-6)' }}>
+        <h2 style={{ marginTop: 0 }}>Export attendance data</h2>
+        <form action="/api/export" method="get" style={{ display: 'grid', gap: 'var(--space-3)' }}>
+          <label style={{ display: 'grid', gap: 'var(--space-1)' }}>
+            Start date
+            <input type="date" name="start" required style={{ padding: 'var(--space-3)' }} />
+          </label>
+          <label style={{ display: 'grid', gap: 'var(--space-1)' }}>
+            End date
+            <input type="date" name="end" required style={{ padding: 'var(--space-3)' }} />
+          </label>
+          <button type="submit">Download CSV</button>
+        </form>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
+          Downloads one row per category per service for every service in the range, including
+          archived services.
+        </p>
+      </section>
     </main>
   )
 }
