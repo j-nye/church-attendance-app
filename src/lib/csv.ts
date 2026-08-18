@@ -9,7 +9,7 @@ export function toCsv(columns: string[], rows: Record<string, string>[]): string
 }
 
 function escapeField(value: string): string {
-  if (/[",\n]/.test(value)) {
+  if (/[",\r\n]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`
   }
   return value

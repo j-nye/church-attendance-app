@@ -1,4 +1,6 @@
-export const TYPE_LABELS: Record<string, string> = {
+import type { CategoryType } from '@prisma/client'
+
+export const TYPE_LABELS: Record<CategoryType, string> = {
   SECTION: 'Sanctuary',
   CLASSROOM: 'Classrooms',
   GROWTH_TRACK: 'Growth Track',

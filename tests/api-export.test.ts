@@ -95,7 +95,7 @@ describe('GET /api/export', () => {
     getExportRows.mockResolvedValue([
       {
         serviceDate: '2026-08-16',
-        serviceName: 'Sunday Service',
+        serviceName: 'Service - Sunday, August 16, 2026',
         archived: false,
         categoryType: 'SECTION',
         group: 'Sanctuary',
@@ -115,8 +115,23 @@ describe('GET /api/export', () => {
     )
     const body = await response.text()
     expect(body).toContain('Service Date,Service Name,Archived,Category Type,Group,Category,Count,Counts Toward Total,Recorded By')
-    expect(body).toContain('2026-08-16,Sunday Service,false,SECTION,Sanctuary,Left Wing,5,true,vol@example.com')
+    expect(body).toContain('2026-08-16,"Service - Sunday, August 16, 2026",false,SECTION,Sanctuary,Left Wing,5,true,vol@example.com')
     expect(getExportRows).toHaveBeenCalledWith(['e1'])
+  })
+
+  it('rejects a malformed start date with 400 without calling listEventsInRange', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    const response = await GET(request('?start=not-a-date&end=2026-08-31'))
+    expect(response.status).toBe(400)
+    expect(listEventsInRange).not.toHaveBeenCalled()
+  })
+
+  it('rejects an eventId longer than idSchema allows with 400 without hitting the database', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    const response = await GET(request(`?eventId=${'a'.repeat(41)}`))
+    expect(response.status).toBe(400)
+    expect(eventFindUnique).not.toHaveBeenCalled()
+    expect(getExportRows).not.toHaveBeenCalled()
   })
 
   it('returns a 200 header-only CSV for a valid range matching zero events', async () => {

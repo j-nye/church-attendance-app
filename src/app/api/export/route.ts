@@ -3,6 +3,7 @@ import { requireAdmin, AuthzError } from '@/lib/authz'
 import { getExportRows, type ExportRow } from '@/lib/actions/attendance'
 import { listEventsInRange } from '@/lib/actions/events'
 import { toCsv } from '@/lib/csv'
+import { idSchema, serviceDateSchema } from '@/lib/validation'
 
 const COLUMNS = [
   'Service Date',
@@ -46,7 +47,7 @@ export async function GET(request: Request): Promise<Response> {
     await requireAdmin()
   } catch (error) {
     if (error instanceof AuthzError) {
-      return new Response(error.code === 'UNAUTHENTICATED' ? 'Not signed in' : 'Not authorized', {
+      return new Response(error.message, {
         status: 403,
       })
     }
@@ -68,8 +69,13 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   if (hasEventId) {
+    const eventIdResult = idSchema.safeParse(eventId)
+    if (!eventIdResult.success) {
+      return new Response('eventId is not a valid id', { status: 400 })
+    }
+
     const event = await prisma.event.findUnique({
-      where: { id: eventId! },
+      where: { id: eventIdResult.data },
       select: { id: true, serviceDate: true },
     })
     if (!event) return new Response('No such service', { status: 404 })
@@ -81,6 +87,13 @@ export async function GET(request: Request): Promise<Response> {
   if (!start || !end) {
     return new Response('Both start and end are required for a range export', { status: 400 })
   }
+
+  const startResult = serviceDateSchema.safeParse(start)
+  const endResult = serviceDateSchema.safeParse(end)
+  if (!startResult.success || !endResult.success) {
+    return new Response('start and end must be YYYY-MM-DD dates', { status: 400 })
+  }
+
   if (start > end) {
     return new Response('start must not be after end', { status: 400 })
   }
