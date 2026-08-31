@@ -6,7 +6,7 @@ import { ZodError } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, requireUser } from '@/lib/authz'
 import { AuthzError } from '@/lib/authz'
-import { createCategorySchema, idSchema } from '@/lib/validation'
+import { createCategorySchema, moveCategorySchema, idSchema } from '@/lib/validation'
 import { friendlyValidationMessage } from '@/lib/validation'
 
 export async function listActiveCategories() {
@@ -19,10 +19,22 @@ export async function listActiveCategories() {
 
 export async function createCategory(input: unknown) {
   await requireAdmin()
-  const data = createCategorySchema.parse(input)
+  const { name, type, svgKey, countsTowardTotal } = createCategorySchema.parse(input)
 
-  const category = await prisma.category.create({ data })
+  // New categories land at the end of their section instead of all
+  // colliding at the schema default of 0 — computed server-side, never
+  // trusted from the client.
+  const { _max } = await prisma.category.aggregate({
+    where: { type, isActive: true },
+    _max: { sortOrder: true },
+  })
+  const sortOrder = (_max.sortOrder ?? -1) + 1
+
+  const category = await prisma.category.create({
+    data: { name, type, svgKey, countsTowardTotal, sortOrder },
+  })
   revalidatePath('/settings')
+  revalidatePath('/entry/[eventId]', 'page')
   return category
 }
 
@@ -74,4 +86,42 @@ export async function createCategoryAction(
     throw error
   }
   return { ok: true }
+}
+
+/**
+ * Swaps sortOrder with the adjacent ACTIVE category of the same type — the
+ * up/down reorder buttons. A boundary row (nothing smaller/larger to swap
+ * with) is a graceful no-op: it returns normally, never throws, so the UI
+ * doesn't need special-case error handling for "you clicked ↑ on the first
+ * row" (the button is also disabled there, but this makes the server
+ * robust to that being wrong or stale).
+ */
+export async function moveCategory(input: unknown) {
+  await requireAdmin()
+  const { id, direction } = moveCategorySchema.parse(input)
+
+  const moved = await prisma.$transaction(async (tx) => {
+    const current = await tx.category.findUnique({ where: { id } })
+    if (!current || !current.isActive) return false
+
+    const neighbor = await tx.category.findFirst({
+      where: {
+        type: current.type,
+        isActive: true,
+        id: { not: current.id },
+        sortOrder: direction === 'up' ? { lt: current.sortOrder } : { gt: current.sortOrder },
+      },
+      orderBy: { sortOrder: direction === 'up' ? 'desc' : 'asc' },
+    })
+    if (!neighbor) return false // already at this boundary
+
+    await tx.category.update({ where: { id: current.id }, data: { sortOrder: neighbor.sortOrder } })
+    await tx.category.update({ where: { id: neighbor.id }, data: { sortOrder: current.sortOrder } })
+    return true
+  })
+
+  if (moved) {
+    revalidatePath('/settings')
+    revalidatePath('/entry/[eventId]', 'page')
+  }
 }

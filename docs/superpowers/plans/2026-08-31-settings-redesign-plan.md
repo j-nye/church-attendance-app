@@ -568,7 +568,7 @@ git commit -m "feat: normalize category sortOrder ties as part of seedCategories
 - Consumes: `requireAdmin()`, `moveCategorySchema` (Task 1), `prisma.category.aggregate`, `prisma.$transaction` (new use in this file).
 - Produces: `createCategory` now computes `sortOrder` server-side (signature unchanged — still `createCategory(input: unknown)`). `moveCategory(input: unknown): Promise<void>` (exported from `src/lib/actions/categories.ts`) — consumed by Task 7's `CategoryRow`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `tests/actions-categories.test.ts`. First, extend the mock scaffolding.
 
@@ -853,7 +853,7 @@ describe('moveCategory', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- actions-categories
@@ -861,7 +861,7 @@ npm test -- actions-categories
 
 Expected: FAIL — `moveCategory` isn't exported yet, and the existing `createCategory` tests fail their new `sortOrder`/revalidatePath assertions.
 
-- [ ] **Step 3: Implement the `createCategory` fix and `moveCategory`**
+- [x] **Step 3: Implement the `createCategory` fix and `moveCategory`**
 
 Update the import line at the top of `src/lib/actions/categories.ts` from:
 
@@ -955,7 +955,7 @@ export async function moveCategory(input: unknown) {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- actions-categories
@@ -963,7 +963,7 @@ npm test -- actions-categories
 
 Expected: PASS, all tests including every one added or changed in this task.
 
-- [ ] **Step 5: Run a type-check**
+- [x] **Step 5: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -971,7 +971,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/actions/categories.ts tests/actions-categories.test.ts
