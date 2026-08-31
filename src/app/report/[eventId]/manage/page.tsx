@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getManageRows } from '@/lib/actions/attendance'
 import { formatServiceDate } from '@/lib/dates'
 import { ManageTable } from '@/components/ManageTable'
+import { AppHeader } from '@/components/AppHeader'
 
 export default async function ManagePage({ params }: { params: Promise<{ eventId: string }> }) {
   // Page-level gate. getManageRows and deleteCount each re-check independently —
@@ -25,11 +26,14 @@ export default async function ManagePage({ params }: { params: Promise<{ eventId
   }))
 
   return (
-    <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
-      <h1 style={{ fontSize: 'var(--text-xl)' }}>{event.name}</h1>
-      <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>{formatServiceDate(event.serviceDate)}</p>
-      <p style={{ color: 'var(--color-text-muted)' }}>Manage attendance records</p>
-      <ManageTable eventId={eventId} rows={tableRows} />
-    </main>
+    <>
+      <AppHeader helpAnchor="manage" />
+      <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
+        <h1 style={{ fontSize: 'var(--text-xl)' }}>{event.name}</h1>
+        <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>{formatServiceDate(event.serviceDate)}</p>
+        <p style={{ color: 'var(--color-text-muted)' }}>Manage attendance records</p>
+        <ManageTable eventId={eventId} rows={tableRows} />
+      </main>
+    </>
   )
 }
