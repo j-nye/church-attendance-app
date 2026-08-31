@@ -1555,7 +1555,7 @@ git commit -m "feat: add updateCategory and deleteCategory"
 - Consumes: `requireAdmin()`, `createEventSchema` (existing), `friendlyValidationMessage`, `AuthzError` (from `src/lib/authz.ts`, not currently imported in this file).
 - Produces: `listRecentEvents(): Promise<Event[]>`, `unarchiveEvent(input: unknown): Promise<void>`, `createEventAction(prevState, formData): Promise<EventFormState>` (all exported from `src/lib/actions/events.ts`). Consumed by Task 8's `ServicesSection`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `tests/actions-events.test.ts`. Add `import { Prisma } from '@prisma/client'` at the top, alongside the existing `import { describe, it, expect, vi, beforeEach } from 'vitest'`.
 
@@ -1752,7 +1752,7 @@ describe('createEventAction', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- actions-events
@@ -1760,7 +1760,7 @@ npm test -- actions-events
 
 Expected: FAIL — `unarchiveEvent`, `listRecentEvents`, and `createEventAction` aren't exported yet, and the updated `createEvent`/`archiveEvent` assertions fail against the current revalidation calls.
 
-- [ ] **Step 3: Implement the changes**
+- [x] **Step 3: Implement the changes**
 
 Update the imports at the top of `src/lib/actions/events.ts` from:
 
@@ -1903,7 +1903,7 @@ export async function createEventAction(
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- actions-events
@@ -1911,7 +1911,7 @@ npm test -- actions-events
 
 Expected: PASS, all tests including every one added or changed in this task.
 
-- [ ] **Step 5: Run a type-check**
+- [x] **Step 5: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -1919,7 +1919,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/actions/events.ts tests/actions-events.test.ts

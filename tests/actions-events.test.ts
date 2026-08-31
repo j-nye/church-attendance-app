@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { Prisma } from '@prisma/client'
 
 const requireAdmin = vi.fn()
 const requireUser = vi.fn()
@@ -36,9 +37,16 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
-const { listEvents, createEvent, archiveEvent, getOrCreateTodayEvent, listEventsInRange } = await import(
-  '@/lib/actions/events'
-)
+const {
+  listEvents,
+  createEvent,
+  archiveEvent,
+  getOrCreateTodayEvent,
+  listEventsInRange,
+  unarchiveEvent,
+  listRecentEvents,
+  createEventAction,
+} = await import('@/lib/actions/events')
 
 beforeEach(() => {
   requireAdmin.mockReset()
@@ -93,6 +101,7 @@ describe('createEvent', () => {
       data: { name: 'Sunday', serviceDate: '2026-08-09' },
     })
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
     expect(result).toEqual({ id: '1', name: 'Sunday', serviceDate: '2026-08-09' })
   })
 })
@@ -110,11 +119,13 @@ describe('archiveEvent', () => {
     expect(eventUpdate).not.toHaveBeenCalled()
   })
 
-  it('archives the event for a valid admin call', async () => {
+  it('archives the event and revalidates dashboard, settings, and its own entry page', async () => {
     requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
     await archiveEvent('id1')
     expect(eventUpdate).toHaveBeenCalledWith({ where: { id: 'id1' }, data: { isArchived: true } })
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/id1')
   })
 })
 
@@ -182,5 +193,116 @@ describe('listEventsInRange', () => {
     eventFindMany.mockResolvedValue([])
     const result = await listEventsInRange('2020-01-01', '2020-01-31')
     expect(result).toEqual([])
+  })
+})
+
+describe('unarchiveEvent', () => {
+  it('rejects a non-admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(unarchiveEvent('id1')).rejects.toThrow(AuthzError)
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects an empty id', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    await expect(unarchiveEvent('')).rejects.toThrow()
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('un-archives the event and revalidates dashboard, settings, and its own entry page', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    await unarchiveEvent('id1')
+    expect(eventUpdate).toHaveBeenCalledWith({ where: { id: 'id1' }, data: { isArchived: false } })
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/id1')
+  })
+})
+
+describe('listRecentEvents', () => {
+  it('requires an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(listRecentEvents()).rejects.toThrow(AuthzError)
+    expect(eventFindMany).not.toHaveBeenCalled()
+  })
+
+  it('returns events including archived ones, most recent first', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindMany.mockResolvedValue([{ id: '1', isArchived: true }])
+    const result = await listRecentEvents()
+    expect(result).toEqual([{ id: '1', isArchived: true }])
+    expect(eventFindMany).toHaveBeenCalledWith({
+      orderBy: [{ serviceDate: 'desc' }, { name: 'asc' }],
+      take: 50,
+    })
+  })
+})
+
+function eventFormData(fields: Record<string, string>): FormData {
+  const data = new FormData()
+  for (const [key, value] of Object.entries(fields)) data.set(key, value)
+  return data
+}
+
+describe('createEventAction', () => {
+  it('returns { ok: true } and creates the event for valid input', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventCreate.mockResolvedValue({ id: '1' })
+
+    const result = await createEventAction(
+      { ok: true },
+      eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06' })
+    )
+
+    expect(result).toEqual({ ok: true })
+    expect(eventCreate).toHaveBeenCalledWith({ data: { name: 'Sunday Service', serviceDate: '2026-09-06' } })
+  })
+
+  it('returns a friendly inline message instead of throwing for a blank name', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+
+    const result = await createEventAction({ ok: true }, eventFormData({ name: '', serviceDate: '2026-09-06' }))
+
+    expect(result).toEqual({ ok: false, message: 'Name is required.' })
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('returns a friendly inline message for a duplicate [serviceDate, name] instead of crashing', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['serviceDate', 'name'] },
+      })
+    )
+
+    const result = await createEventAction(
+      { ok: true },
+      eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'A service with that name already exists on that date.' })
+  })
+
+  it('returns a friendly inline message when the session is no longer an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+
+    const result = await createEventAction(
+      { ok: true },
+      eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'You are not authorized to do that.' })
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('rethrows an unexpected error so the app error boundary still catches it', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventCreate.mockRejectedValue(new Error('connection reset'))
+
+    await expect(
+      createEventAction({ ok: true }, eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06' }))
+    ).rejects.toThrow('connection reset')
   })
 })
