@@ -2647,7 +2647,7 @@ git commit -m "feat: add the category manager UI to Settings"
 
 Same convention as Task 7: pure UI wiring around already-tested Server Actions, no new automated tests. Verification is a type-check, the full suite staying green, and the manual checklist in Task 9.
 
-- [ ] **Step 1: Create `ServicesSection`**
+- [x] **Step 1: Create `ServicesSection`**
 
 Create `src/components/ServicesSection.tsx`:
 
@@ -2777,7 +2777,7 @@ export function ServicesSection({
 }
 ```
 
-- [ ] **Step 2: Wire `ServicesSection` into `settings/page.tsx`**
+- [x] **Step 2: Wire `ServicesSection` into `settings/page.tsx`**
 
 Update the imports at the top of `src/app/settings/page.tsx` — change:
 
@@ -2857,7 +2857,7 @@ to:
       {categoryTypes.map((type) => (
 ```
 
-- [ ] **Step 3: Run a type-check**
+- [x] **Step 3: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -2865,7 +2865,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 4: Run the full test suite**
+- [x] **Step 4: Run the full test suite**
 
 ```bash
 npm test
@@ -2873,7 +2873,7 @@ npm test
 
 Expected: all passing.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/ServicesSection.tsx src/app/settings/page.tsx

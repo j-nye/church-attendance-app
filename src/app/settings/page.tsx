@@ -1,9 +1,12 @@
 import { requireAdminPage } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
 import { deactivateAllowlistEntry, listAllowlist } from '@/lib/actions/allowlist'
+import { listRecentEvents } from '@/lib/actions/events'
+import { nextSundayServiceDate } from '@/lib/dates'
 import { AddAllowlistForm } from '@/components/AddAllowlistForm'
 import { AppHeader } from '@/components/AppHeader'
 import { CategorySection, type CategoryRowData } from '@/components/CategorySection'
+import { ServicesSection, type ServiceRowData } from '@/components/ServicesSection'
 import { TYPE_LABELS } from '@/lib/category-labels'
 import type { CategoryType } from '@prisma/client'
 
@@ -13,13 +16,22 @@ export default async function SettingsPage() {
   // /denied instead of leaving Next's raw error screen as the only outcome.
   await requireAdminPage()
 
-  const [categoryRecords, allowlist] = await Promise.all([
+  const [categoryRecords, allowlist, events] = await Promise.all([
     prisma.category.findMany({
       orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
       include: { _count: { select: { records: true } } },
     }),
     listAllowlist(),
+    listRecentEvents(),
   ])
+
+  const services: ServiceRowData[] = events.map((e) => ({
+    id: e.id,
+    name: e.name,
+    serviceDate: e.serviceDate,
+    isArchived: e.isArchived,
+  }))
+  const defaultServiceDate = nextSundayServiceDate()
 
   const categories: CategoryRowData[] = categoryRecords.map((c) => ({
     id: c.id,
@@ -46,6 +58,8 @@ export default async function SettingsPage() {
       <AppHeader helpAnchor="categories" />
       <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
         <h1 style={{ fontSize: 'var(--text-xl)' }}>Settings</h1>
+
+        <ServicesSection services={services} defaultServiceDate={defaultServiceDate} />
 
         {categoryTypes.map((type) => (
           <CategorySection
