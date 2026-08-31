@@ -529,7 +529,7 @@ describe('deactivateCategory', () => {
     expect(categoryUpdate).not.toHaveBeenCalled()
   })
 
-  it('deactivates for a valid admin call', async () => {
+  it('deactivates for a valid admin call and revalidates settings and every entry page', async () => {
     requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
     await deactivateCategory('id1')
     expect(categoryUpdate).toHaveBeenCalledWith({
@@ -537,6 +537,7 @@ describe('deactivateCategory', () => {
       data: { isActive: false },
     })
     expect(revalidatePath).toHaveBeenCalledWith('/settings')
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/[eventId]', 'page')
   })
 })
 

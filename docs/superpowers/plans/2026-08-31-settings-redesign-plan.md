@@ -1943,7 +1943,7 @@ git commit -m "feat: add listRecentEvents, unarchiveEvent, and createEventAction
 
 This task is UI wiring around already-tested Server Actions — matching this project's convention of not adding new automated tests for pure UI composition (see the attendance-CRUD plan's Task 4). Verification here is a type-check, the full existing suite staying green, and the manual checklist in Task 9.
 
-- [ ] **Step 1: Create the shared `ConfirmDialog`**
+- [x] **Step 1: Create the shared `ConfirmDialog`**
 
 Create `src/components/ConfirmDialog.tsx`:
 
@@ -2038,7 +2038,7 @@ export function ConfirmDialog({
 }
 ```
 
-- [ ] **Step 2: Create `EditCategoryDialog`**
+- [x] **Step 2: Create `EditCategoryDialog`**
 
 Create `src/components/EditCategoryDialog.tsx`:
 
@@ -2174,7 +2174,7 @@ export function EditCategoryDialog({
 }
 ```
 
-- [ ] **Step 3: Rewrite `AddCategoryForm` to take a fixed `type`**
+- [x] **Step 3: Rewrite `AddCategoryForm` to take a fixed `type`**
 
 Replace the full contents of `src/components/AddCategoryForm.tsx`:
 
@@ -2257,7 +2257,7 @@ export function AddCategoryForm({
 }
 ```
 
-- [ ] **Step 4: Create `CategorySection`**
+- [x] **Step 4: Create `CategorySection`**
 
 Create `src/components/CategorySection.tsx`:
 
@@ -2503,7 +2503,7 @@ export function CategorySection({
 }
 ```
 
-- [ ] **Step 5: Wire `CategorySection` into `settings/page.tsx`**
+- [x] **Step 5: Wire `CategorySection` into `settings/page.tsx`**
 
 Replace the full contents of `src/app/settings/page.tsx`:
 
@@ -2610,7 +2610,7 @@ export default async function SettingsPage() {
 
 (Task 8 adds the Services section above the category loop; the export and allowlist sections above are otherwise final.)
 
-- [ ] **Step 6: Run a type-check**
+- [x] **Step 6: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -2618,7 +2618,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 7: Run the full test suite**
+- [x] **Step 7: Run the full test suite**
 
 ```bash
 npm test
@@ -2626,7 +2626,7 @@ npm test
 
 Expected: all passing — this task adds no new automated tests but must not break anything existing.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/components/ConfirmDialog.tsx src/components/EditCategoryDialog.tsx src/components/CategorySection.tsx src/components/AddCategoryForm.tsx src/app/settings/page.tsx

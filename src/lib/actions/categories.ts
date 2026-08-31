@@ -54,6 +54,7 @@ export async function deactivateCategory(input: unknown) {
 
   await prisma.category.update({ where: { id }, data: { isActive: false } })
   revalidatePath('/settings')
+  revalidatePath('/entry/[eventId]', 'page')
 }
 
 export type CategoryFormState = { ok: boolean; message?: string }
