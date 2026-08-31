@@ -135,7 +135,7 @@ git commit -m "feat: add AuditLog model for deleteCount audit trail"
 - Consumes: `requireAdmin()`, `idSchema` (both already imported in `attendance.ts`), `prisma.category.findMany`, `prisma.attendanceRecord.findMany`.
 - Produces: `ManageRow` type and `getManageRows(eventId: string): Promise<ManageRow[]>` (exported from `src/lib/actions/attendance.ts`) — consumed by Task 4's manage page.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `tests/actions-attendance.test.ts`. First, extend the existing mock scaffolding — add a `category.findMany` mock and a `getManageRows` import.
 
@@ -322,7 +322,7 @@ describe('getManageRows', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- actions-attendance
@@ -330,7 +330,7 @@ npm test -- actions-attendance
 
 Expected: FAIL — `getManageRows` is not exported from `@/lib/actions/attendance`.
 
-- [ ] **Step 3: Implement `getManageRows`**
+- [x] **Step 3: Implement `getManageRows`**
 
 Add to `src/lib/actions/attendance.ts`, at the end of the file:
 
@@ -396,7 +396,7 @@ export async function getManageRows(eventId: string): Promise<ManageRow[]> {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- actions-attendance
@@ -404,7 +404,7 @@ npm test -- actions-attendance
 
 Expected: PASS, all tests in the file including the 5 new ones.
 
-- [ ] **Step 5: Run a type-check**
+- [x] **Step 5: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -412,7 +412,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/actions/attendance.ts tests/actions-attendance.test.ts

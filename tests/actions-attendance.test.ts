@@ -7,6 +7,7 @@ const revalidatePath = vi.fn()
 const eventFindUnique = vi.fn()
 const eventFindMany = vi.fn()
 const categoryFindUnique = vi.fn()
+const categoryFindMany = vi.fn()
 const attendanceUpsert = vi.fn()
 const attendanceFindMany = vi.fn()
 
@@ -30,6 +31,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     category: {
       findUnique: (...args: unknown[]) => categoryFindUnique(...args),
+      findMany: (...args: unknown[]) => categoryFindMany(...args),
     },
     attendanceRecord: {
       upsert: (...args: unknown[]) => attendanceUpsert(...args),
@@ -42,7 +44,9 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
-const { saveCount, getEventCounts, getEventSummary, getExportRows } = await import('@/lib/actions/attendance')
+const { saveCount, getEventCounts, getEventSummary, getExportRows, getManageRows } = await import(
+  '@/lib/actions/attendance'
+)
 
 const VOLUNTEER = { email: 'vol@example.com', role: 'VOLUNTEER' as const }
 const ADMIN = { email: 'admin@example.com', role: 'ADMIN' as const }
@@ -54,6 +58,7 @@ beforeEach(() => {
   eventFindUnique.mockReset()
   eventFindMany.mockReset()
   categoryFindUnique.mockReset()
+  categoryFindMany.mockReset()
   attendanceUpsert.mockReset()
   attendanceFindMany.mockReset()
 })
@@ -357,6 +362,152 @@ describe('getExportRows', () => {
         },
       },
       orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
+    })
+  })
+})
+
+describe('getManageRows', () => {
+  it('requires an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(getManageRows('e1')).rejects.toThrow(AuthzError)
+    expect(categoryFindMany).not.toHaveBeenCalled()
+    expect(attendanceFindMany).not.toHaveBeenCalled()
+  })
+
+  it('returns an active category with no record as an unrecorded row', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindMany.mockResolvedValue([{ id: 'c1', name: 'Main Hall', type: 'SECTION' }])
+    attendanceFindMany.mockResolvedValue([])
+
+    const result = await getManageRows('e1')
+
+    expect(result).toEqual([
+      {
+        categoryId: 'c1',
+        categoryName: 'Main Hall',
+        categoryType: 'SECTION',
+        count: undefined,
+        recordedBy: undefined,
+        updatedAt: undefined,
+      },
+    ])
+  })
+
+  it('includes a retired category that still has a recorded count', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindMany.mockResolvedValue([]) // the category has since been retired
+    const updatedAt = new Date('2026-08-09T10:00:00Z')
+    attendanceFindMany.mockResolvedValue([
+      {
+        categoryId: 'c9',
+        count: 7,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+        category: { id: 'c9', name: 'Old Annex', type: 'CLASSROOM' },
+      },
+    ])
+
+    const result = await getManageRows('e1')
+
+    expect(result).toEqual([
+      {
+        categoryId: 'c9',
+        categoryName: 'Old Annex',
+        categoryType: 'CLASSROOM',
+        count: 7,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+      },
+    ])
+  })
+
+  it('populates count, recordedBy, and updatedAt for an active category that has a record', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindMany.mockResolvedValue([{ id: 'c1', name: 'Main Hall', type: 'SECTION' }])
+    const updatedAt = new Date('2026-08-09T10:00:00Z')
+    attendanceFindMany.mockResolvedValue([
+      {
+        categoryId: 'c1',
+        count: 50,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+        category: { id: 'c1', name: 'Main Hall', type: 'SECTION' },
+      },
+    ])
+
+    const result = await getManageRows('e1')
+
+    expect(result).toEqual([
+      {
+        categoryId: 'c1',
+        categoryName: 'Main Hall',
+        categoryType: 'SECTION',
+        count: 50,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+      },
+    ])
+  })
+
+  it('unions active categories with recorded categories: an unrecorded active category, a recorded active category, and a recorded retired category all appear exactly once', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindMany.mockResolvedValue([
+      { id: 'c1', name: 'Main Hall', type: 'SECTION' }, // will have a record
+      { id: 'c2', name: 'Kids Room', type: 'CLASSROOM' }, // stays unrecorded
+    ])
+    const updatedAt = new Date('2026-08-09T10:00:00Z')
+    attendanceFindMany.mockResolvedValue([
+      {
+        categoryId: 'c1',
+        count: 50,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+        category: { id: 'c1', name: 'Main Hall', type: 'SECTION' },
+      },
+      {
+        categoryId: 'c9',
+        count: 7,
+        recordedBy: 'vol2@example.com',
+        updatedAt,
+        category: { id: 'c9', name: 'Old Annex', type: 'CLASSROOM' }, // retired category
+      },
+    ])
+
+    const result = await getManageRows('e1')
+
+    expect(result).toEqual([
+      {
+        categoryId: 'c1',
+        categoryName: 'Main Hall',
+        categoryType: 'SECTION',
+        count: 50,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+      },
+      {
+        categoryId: 'c2',
+        categoryName: 'Kids Room',
+        categoryType: 'CLASSROOM',
+        count: undefined,
+        recordedBy: undefined,
+        updatedAt: undefined,
+      },
+      {
+        categoryId: 'c9',
+        categoryName: 'Old Annex',
+        categoryType: 'CLASSROOM',
+        count: 7,
+        recordedBy: 'vol2@example.com',
+        updatedAt,
+      },
+    ])
+    expect(categoryFindMany).toHaveBeenCalledWith({
+      where: { isActive: true },
+      orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    })
+    expect(attendanceFindMany).toHaveBeenCalledWith({
+      where: { eventId: 'e1' },
+      include: { category: true },
     })
   })
 })

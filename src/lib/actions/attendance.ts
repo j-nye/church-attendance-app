@@ -142,3 +142,63 @@ export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
     }))
   )
 }
+
+export type ManageRow = {
+  categoryId: string
+  categoryName: string
+  categoryType: string
+  count?: number
+  recordedBy?: string
+  updatedAt?: Date
+}
+
+/**
+ * One row per category relevant to this service: every active category
+ * (mirrors what the entry screen shows) UNIONED with any category that has
+ * an existing record here even if it's since been retired — otherwise a
+ * stray record tied to a retired category would be invisible to the one
+ * page built to find and clean it up.
+ */
+export async function getManageRows(eventId: string): Promise<ManageRow[]> {
+  await requireAdmin()
+  const id = idSchema.parse(eventId)
+
+  const [categories, records] = await Promise.all([
+    prisma.category.findMany({
+      where: { isActive: true },
+      orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.attendanceRecord.findMany({
+      where: { eventId: id },
+      include: { category: true },
+    }),
+  ])
+
+  // A Map preserves insertion order and re-setting an existing key updates
+  // its value in place without moving it — so an active category that also
+  // has a record stays at its original (sorted) position, and a retired
+  // category with a record is appended at the end.
+  const rows = new Map<string, ManageRow>()
+  for (const category of categories) {
+    rows.set(category.id, {
+      categoryId: category.id,
+      categoryName: category.name,
+      categoryType: category.type,
+      count: undefined,
+      recordedBy: undefined,
+      updatedAt: undefined,
+    })
+  }
+  for (const record of records) {
+    rows.set(record.categoryId, {
+      categoryId: record.categoryId,
+      categoryName: record.category.name,
+      categoryType: record.category.type,
+      count: record.count,
+      recordedBy: record.recordedBy,
+      updatedAt: record.updatedAt,
+    })
+  }
+
+  return Array.from(rows.values())
+}
