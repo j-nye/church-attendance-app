@@ -727,7 +727,7 @@ git commit -m "feat: add deleteCount with audit logging"
 
 This task is UI wiring around already-tested Server Actions (`getManageRows`, `deleteCount`, and the pre-existing `saveCount` via `CounterDialog`) — matching this project's convention of not adding new automated tests for pure UI composition (see `docs/superpowers/plans/2026-08-17-csv-export-plan.md` Task 5). Verification here is a type-check, the full existing suite staying green, and the manual checklist in Task 6.
 
-- [ ] **Step 1: Create `ManageTable`**
+- [x] **Step 1: Create `ManageTable`**
 
 Create `src/components/ManageTable.tsx`:
 
@@ -830,7 +830,7 @@ export function ManageTable({ eventId, rows: initialRows }: { eventId: string; r
 
 Note: `CounterDialog` renders a fixed-position overlay `<div>`, so it must be a sibling of the `<table>`, not nested inside it (an HTML table cannot contain a `<div>` as a direct child) — the wrapping `<>...</>` fragment above handles that.
 
-- [ ] **Step 2: Create the manage page**
+- [x] **Step 2: Create the manage page**
 
 Create `src/app/report/[eventId]/manage/page.tsx`:
 
@@ -870,7 +870,7 @@ export default async function ManagePage({ params }: { params: Promise<{ eventId
 }
 ```
 
-- [ ] **Step 3: Run a type-check**
+- [x] **Step 3: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -878,7 +878,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 4: Run the full test suite**
+- [x] **Step 4: Run the full test suite**
 
 ```bash
 npm test
@@ -886,7 +886,7 @@ npm test
 
 Expected: all passing — this task adds no new tests but must not break anything existing.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add "src/app/report/[eventId]/manage/page.tsx" src/components/ManageTable.tsx
