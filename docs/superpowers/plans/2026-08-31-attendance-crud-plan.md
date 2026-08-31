@@ -903,7 +903,7 @@ git commit -m "feat: add admin manage-records page"
 **Interfaces:**
 - Consumes: nothing new — pure UI, linking to the already-built `/report/<eventId>/manage` page from Task 4. Reuses the existing `user.role === 'ADMIN'` check already present in this file (from the CSV export plan) and the existing `Link` import convention used elsewhere in this codebase (e.g. `src/app/dashboard/page.tsx`).
 
-- [ ] **Step 1: Add the link**
+- [x] **Step 1: Add the link**
 
 In `src/app/report/[eventId]/page.tsx`, add the import:
 
@@ -968,7 +968,7 @@ to:
 
 (`className="no-print"` matches the existing convention — the link shouldn't show up in the printed/PDF version of the report.)
 
-- [ ] **Step 2: Run a type-check**
+- [x] **Step 2: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -976,7 +976,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 3: Run the full test suite**
+- [x] **Step 3: Run the full test suite**
 
 ```bash
 npm test
@@ -984,7 +984,7 @@ npm test
 
 Expected: all passing.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add "src/app/report/[eventId]/page.tsx"

@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getEventSummary } from '@/lib/actions/attendance'
 import { PrintButton } from '@/components/PrintButton'
 import { formatServiceDate } from '@/lib/dates'
@@ -17,17 +18,30 @@ export default async function ReportPage({ params }: { params: Promise<{ eventId
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
           {user.role === 'ADMIN' && (
-            <a
-              href={`/api/export?eventId=${eventId}`}
-              className="no-print"
-              style={{
-                display: 'inline-flex', alignItems: 'center', padding: '0 var(--space-4)',
-                border: '1px solid var(--color-border)', borderRadius: 'var(--radius)',
-                color: 'var(--color-text)', textDecoration: 'none',
-              }}
-            >
-              Download CSV
-            </a>
+            <>
+              <Link
+                href={`/report/${eventId}/manage`}
+                className="no-print"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', padding: '0 var(--space-4)',
+                  border: '1px solid var(--color-border)', borderRadius: 'var(--radius)',
+                  color: 'var(--color-text)', textDecoration: 'none',
+                }}
+              >
+                Manage Records
+              </Link>
+              <a
+                href={`/api/export?eventId=${eventId}`}
+                className="no-print"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', padding: '0 var(--space-4)',
+                  border: '1px solid var(--color-border)', borderRadius: 'var(--radius)',
+                  color: 'var(--color-text)', textDecoration: 'none',
+                }}
+              >
+                Download CSV
+              </a>
+            </>
           )}
           <PrintButton />
         </div>
