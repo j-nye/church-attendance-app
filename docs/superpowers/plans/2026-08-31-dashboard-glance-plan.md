@@ -34,7 +34,7 @@
 
 This task is UI wiring around an already-tested Server Action — no red/green test cycle, per the Global Constraints above.
 
-- [ ] **Step 1: Create `ServiceCard`**
+- [x] **Step 1: Create `ServiceCard`**
 
 Create `src/components/ServiceCard.tsx`:
 
@@ -179,7 +179,7 @@ export function ServiceCard({ id, name, serviceDate }: { id: string; name: strin
 
 Note: a zero-count service needs no special-casing — `getEventSummary` succeeds with an empty `records` array, so every `totals` field is already `0`, and the table above renders that directly. That's itself the at-a-glance answer ("nobody has counted yet"), per the spec.
 
-- [ ] **Step 2: Run a type-check**
+- [x] **Step 2: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -187,7 +187,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 3: Run the full test suite**
+- [x] **Step 3: Run the full test suite**
 
 ```bash
 npm test
@@ -195,7 +195,7 @@ npm test
 
 Expected: all passing — this task adds no new tests but must not break anything existing.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/ServiceCard.tsx
