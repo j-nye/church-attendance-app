@@ -38,7 +38,7 @@
 
 This task has no red/green test cycle — it's a schema change verified by `prisma validate`, an actual migration run against the Neon dev database, and a type-check that confirms the generated client now exposes `prisma.auditLog`.
 
-- [ ] **Step 1: Add the model to the schema**
+- [x] **Step 1: Add the model to the schema**
 
 In `prisma/schema.prisma`, add this new model after `AttendanceRecord` (end of file, after line 84):
 
@@ -64,7 +64,7 @@ model AuditLog {
 }
 ```
 
-- [ ] **Step 2: Validate the schema**
+- [x] **Step 2: Validate the schema**
 
 ```bash
 npx prisma validate
@@ -72,7 +72,7 @@ npx prisma validate
 
 Expected: `The schema at prisma/schema.prisma is valid 🚀`
 
-- [ ] **Step 3: Create and apply the migration**
+- [x] **Step 3: Create and apply the migration**
 
 ```bash
 npx prisma migrate dev --name add_audit_log
@@ -82,7 +82,7 @@ This creates a new folder under `prisma/migrations/` (timestamp-prefixed, e.g. `
 
 Expected: ends with `Your database is now in sync with your schema.` and a "Generated Prisma Client" line.
 
-- [ ] **Step 4: Confirm the generated SQL**
+- [x] **Step 4: Confirm the generated SQL**
 
 Read the new `migration.sql` file. It should match this shape (exact column order/types, matching the existing migrations' style):
 
@@ -106,7 +106,7 @@ CREATE INDEX "AuditLog_eventId_idx" ON "AuditLog"("eventId");
 
 No `AddForeignKey` statement should appear — this table has no relations.
 
-- [ ] **Step 5: Type-check**
+- [x] **Step 5: Type-check**
 
 ```bash
 npx tsc --noEmit
@@ -114,7 +114,7 @@ npx tsc --noEmit
 
 Expected: clean. This confirms the generated Prisma Client now types `prisma.auditLog`, which Task 3 depends on.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Both the schema change and the generated migration folder must be committed together — a migration without its matching schema change (or vice versa) leaves `prisma migrate deploy` unable to reconstruct history in production.
 

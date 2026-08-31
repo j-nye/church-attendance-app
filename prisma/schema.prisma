@@ -82,3 +82,23 @@ model AttendanceRecord {
   @@unique([eventId, categoryId])
   @@index([eventId])
 }
+
+/// Captures what a destructive action destroyed. Delete is the only
+/// irreversible action in an app that otherwise soft-deletes on principle.
+/// Deliberately relation-free — eventId/categoryId are plain strings with no
+/// foreign keys, so an audit row can never be cascaded away or block a
+/// future cleanup of the event/category it refers to.
+model AuditLog {
+  id         String   @id @default(cuid())
+  /// Derived from the session, never from input — same rule as recordedBy.
+  actorEmail String
+  /// 'DELETE_COUNT' for now. A string, not an enum, so a future audited
+  /// action doesn't need a schema migration.
+  action     String
+  eventId    String
+  categoryId String
+  priorCount Int
+  createdAt  DateTime @default(now())
+
+  @@index([eventId])
+}
