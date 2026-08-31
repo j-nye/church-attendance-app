@@ -39,7 +39,7 @@
 
 This task has no red/green test cycle — it's a schema change verified by `prisma validate`, an actual migration run against the Neon dev database, and a type-check that confirms the generated client now exposes `prisma.serviceSpeaker`.
 
-- [ ] **Step 1: Add the relation field to `Event` and the new model to the schema**
+- [x] **Step 1: Add the relation field to `Event` and the new model to the schema**
 
 In `prisma/schema.prisma`, add a `speakers` relation field to the existing `Event` model (a Prisma relation needs both sides declared). Change:
 
@@ -98,7 +98,7 @@ model ServiceSpeaker {
 
 `onDelete: Cascade` matches `AttendanceRecord`'s relationship to `Event` — deleting an event should take its speakers with it. `@@unique([eventId, name])` is what makes a duplicate name for the same event a `P2002` instead of a second row.
 
-- [ ] **Step 2: Validate the schema**
+- [x] **Step 2: Validate the schema**
 
 ```bash
 npx prisma validate
@@ -106,7 +106,7 @@ npx prisma validate
 
 Expected: `The schema at prisma/schema.prisma is valid 🚀`
 
-- [ ] **Step 3: Create and apply the migration**
+- [x] **Step 3: Create and apply the migration**
 
 ```bash
 npx prisma migrate dev --name add_service_speaker
@@ -116,7 +116,7 @@ This creates a new folder under `prisma/migrations/` (timestamp-prefixed, e.g. `
 
 Expected: ends with `Your database is now in sync with your schema.` and a "Generated Prisma Client" line.
 
-- [ ] **Step 4: Confirm the generated SQL**
+- [x] **Step 4: Confirm the generated SQL**
 
 Read the new `migration.sql` file. It should match this shape (exact column order/types, matching the existing migrations' style — compare against `AttendanceRecord`'s foreign key to `Event` in `prisma/migrations/20260809124441_init/migration.sql`):
 
@@ -144,7 +144,7 @@ ALTER TABLE "ServiceSpeaker" ADD CONSTRAINT "ServiceSpeaker_eventId_fkey" FOREIG
 
 No changes to the `Event` table itself appear — a Prisma relation array (`speakers ServiceSpeaker[]`) is a schema-level-only construct with no corresponding column.
 
-- [ ] **Step 5: Type-check**
+- [x] **Step 5: Type-check**
 
 ```bash
 npx tsc --noEmit
@@ -152,7 +152,7 @@ npx tsc --noEmit
 
 Expected: clean. This confirms the generated Prisma Client now types `prisma.serviceSpeaker`, which Task 2 depends on.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Both the schema change and the generated migration folder must be committed together — a migration without its matching schema change (or vice versa) leaves `prisma migrate deploy` unable to reconstruct history in production.
 

@@ -41,6 +41,7 @@ model Event {
   isArchived  Boolean            @default(false)
   createdAt   DateTime           @default(now())
   records     AttendanceRecord[]
+  speakers    ServiceSpeaker[]
 
   @@unique([serviceDate, name])
   @@index([serviceDate])
@@ -80,6 +81,22 @@ model AttendanceRecord {
   category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   @@unique([eventId, categoryId])
+  @@index([eventId])
+}
+
+/// A person on the stage for a service. Zero or more per event.
+model ServiceSpeaker {
+  id         String   @id @default(cuid())
+  eventId    String
+  /// Display name as entered. Trimmed; uniqueness is per event.
+  name       String
+  /// Email of the signed-in user, always derived server-side from the session.
+  recordedBy String
+  createdAt  DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, name])
   @@index([eventId])
 }
 
