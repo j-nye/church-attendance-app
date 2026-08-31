@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** Shipped — all tasks implemented (see git history a91aa8e..55c889f); checkboxes below were never ticked during execution.
+
 **Goal:** Let an admin download attendance data as CSV — one service at a time from the report page, or a date range from Settings.
 
 **Architecture:** A pure CSV-formatting helper, two new data-fetching functions (one for multi-event category rows, one for date-range event lookup) added to the existing Server Action files they belong with, and a single GET Route Handler that ties them together and streams the file with proper download headers. Every layer re-checks `requireAdmin()` independently, matching this codebase's established defense-in-depth convention.

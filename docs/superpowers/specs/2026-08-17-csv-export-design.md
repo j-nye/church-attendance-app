@@ -1,7 +1,7 @@
 # CSV export for attendance data
 
 **Date:** 2026-08-17
-**Status:** Approved, pending implementation plan
+**Status:** Shipped (2026-08-17 plan fully implemented plus review hardening in 55c889f)
 
 ## Motivation
 
