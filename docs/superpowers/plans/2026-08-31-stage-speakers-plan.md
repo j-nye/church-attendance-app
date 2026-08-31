@@ -175,7 +175,7 @@ git commit -m "feat: add ServiceSpeaker model for stage speakers"
 - Consumes: `idSchema` (existing, in `src/lib/validation.ts`), `requireUser` (existing, in `src/lib/authz.ts`), `Prisma.PrismaClientKnownRequestError` (from `@prisma/client`), `prisma.serviceSpeaker` (Task 1), `revalidatePath`.
 - Produces: `speakerNameSchema`, `addSpeakerSchema`, `removeSpeakerSchema` (exported from `src/lib/validation.ts`). `Speaker` type, `listSpeakers(eventId: string): Promise<Speaker[]>`, `addSpeaker(input: unknown): Promise<{ ok: true }>`, `removeSpeaker(input: unknown): Promise<{ ok: true }>` (all exported from `src/lib/actions/speakers.ts`) — consumed by Task 4's `SpeakerDialog`/`EntryClient`/entry `page.tsx`, and Task 5's report `page.tsx`.
 
-- [ ] **Step 1: Write the failing tests for the schemas**
+- [x] **Step 1: Write the failing tests for the schemas**
 
 Add `addSpeakerSchema, removeSpeakerSchema` to the existing import line at the top of `tests/validation.test.ts`:
 
@@ -248,7 +248,7 @@ describe('removeSpeakerSchema', () => {
 })
 ```
 
-- [ ] **Step 2: Run the schema tests to verify they fail**
+- [x] **Step 2: Run the schema tests to verify they fail**
 
 ```bash
 npm test -- validation
@@ -256,7 +256,7 @@ npm test -- validation
 
 Expected: FAIL — `addSpeakerSchema` and `removeSpeakerSchema` are not exported yet, so the imports resolve to `undefined` and `.parse` throws a `TypeError`.
 
-- [ ] **Step 3: Add the schemas**
+- [x] **Step 3: Add the schemas**
 
 In `src/lib/validation.ts`, add this after `deleteCountSchema`:
 
@@ -276,7 +276,7 @@ export const removeSpeakerSchema = z.object({
 })
 ```
 
-- [ ] **Step 4: Run the schema tests to verify they pass**
+- [x] **Step 4: Run the schema tests to verify they pass**
 
 ```bash
 npm test -- validation
@@ -284,7 +284,7 @@ npm test -- validation
 
 Expected: PASS, all new tests plus the existing suite.
 
-- [ ] **Step 5: Write the failing tests for the actions**
+- [x] **Step 5: Write the failing tests for the actions**
 
 Create `tests/actions-speakers.test.ts`, mirroring `tests/actions-attendance.test.ts`'s mock scaffolding (mock `@/lib/authz`, `@/lib/prisma`, `next/cache`; await-import the module under test after the mocks are set up). The `P2002` case imports the **real** `Prisma` namespace from `@prisma/client` — not mocked — so the test constructs the actual error class the generated client raises, and `addSpeaker`'s `instanceof`/`.code` check is genuinely exercised rather than assumed:
 
@@ -542,7 +542,7 @@ describe('removeSpeaker', () => {
 })
 ```
 
-- [ ] **Step 6: Run the tests to verify they fail**
+- [x] **Step 6: Run the tests to verify they fail**
 
 ```bash
 npm test -- actions-speakers
@@ -550,7 +550,7 @@ npm test -- actions-speakers
 
 Expected: FAIL — `@/lib/actions/speakers` does not exist yet.
 
-- [ ] **Step 7: Implement `src/lib/actions/speakers.ts`**
+- [x] **Step 7: Implement `src/lib/actions/speakers.ts`**
 
 ```ts
 'use server'
@@ -633,7 +633,7 @@ export async function removeSpeaker(input: unknown) {
 }
 ```
 
-- [ ] **Step 8: Run the tests to verify they pass**
+- [x] **Step 8: Run the tests to verify they pass**
 
 ```bash
 npm test -- actions-speakers
@@ -641,7 +641,7 @@ npm test -- actions-speakers
 
 Expected: PASS, all tests.
 
-- [ ] **Step 9: Run a type-check**
+- [x] **Step 9: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -649,7 +649,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/lib/validation.ts src/lib/actions/speakers.ts tests/validation.test.ts tests/actions-speakers.test.ts

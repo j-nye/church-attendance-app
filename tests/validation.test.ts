@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   saveCountSchema,
   deleteCountSchema,
+  addSpeakerSchema,
+  removeSpeakerSchema,
   categoryTypeSchema,
   createCategorySchema,
   createEventSchema,
@@ -48,6 +50,56 @@ describe('deleteCountSchema', () => {
 
   it('rejects an empty eventId', () => {
     expect(() => deleteCountSchema.parse({ ...valid, eventId: '' })).toThrow()
+  })
+})
+
+describe('addSpeakerSchema', () => {
+  const valid = { eventId: 'clx0000000000000000000001', name: 'Pastor Jones' }
+
+  it('accepts a valid eventId/name pair', () => {
+    expect(addSpeakerSchema.parse(valid)).toEqual(valid)
+  })
+
+  it('trims whitespace from the name', () => {
+    const result = addSpeakerSchema.parse({ ...valid, name: '  Pastor Jones  ' })
+    expect(result.name).toBe('Pastor Jones')
+  })
+
+  it('rejects an empty name', () => {
+    expect(() => addSpeakerSchema.parse({ ...valid, name: '' })).toThrow()
+  })
+
+  it('rejects a whitespace-only name', () => {
+    expect(() => addSpeakerSchema.parse({ ...valid, name: '   ' })).toThrow()
+  })
+
+  it('rejects a name longer than 80 characters', () => {
+    expect(() => addSpeakerSchema.parse({ ...valid, name: 'x'.repeat(81) })).toThrow()
+  })
+
+  it('accepts a name at exactly the 80-character cap', () => {
+    const name = 'x'.repeat(80)
+    expect(addSpeakerSchema.parse({ ...valid, name }).name).toBe(name)
+  })
+
+  it('rejects a missing eventId', () => {
+    expect(() => addSpeakerSchema.parse({ name: valid.name })).toThrow()
+  })
+})
+
+describe('removeSpeakerSchema', () => {
+  const valid = { eventId: 'clx0000000000000000000001', speakerId: 'clx0000000000000000000002' }
+
+  it('accepts a valid eventId/speakerId pair', () => {
+    expect(removeSpeakerSchema.parse(valid)).toEqual(valid)
+  })
+
+  it('rejects a missing speakerId', () => {
+    expect(() => removeSpeakerSchema.parse({ eventId: valid.eventId })).toThrow()
+  })
+
+  it('rejects an empty eventId', () => {
+    expect(() => removeSpeakerSchema.parse({ ...valid, eventId: '' })).toThrow()
   })
 })
 

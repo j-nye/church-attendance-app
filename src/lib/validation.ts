@@ -40,6 +40,20 @@ export const deleteCountSchema = z.object({
   categoryId: idSchema,
 })
 
+export const SPEAKER_NAME_MAX = 80
+
+export const speakerNameSchema = z.string().trim().min(1).max(SPEAKER_NAME_MAX)
+
+export const addSpeakerSchema = z.object({
+  eventId: idSchema,
+  name: speakerNameSchema,
+})
+
+export const removeSpeakerSchema = z.object({
+  eventId: idSchema,
+  speakerId: idSchema,
+})
+
 export const createCategorySchema = z.object({
   name: z.string().trim().min(1).max(CATEGORY_NAME_MAX),
   type: categoryTypeSchema,
