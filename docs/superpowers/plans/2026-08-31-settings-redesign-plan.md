@@ -355,7 +355,7 @@ git commit -m "feat: add moveCategory/renameCategory/updateCategory schemas and 
 
 Before `createCategory` gets its `sortOrder = max + 1` fix in Task 3, every category ever added through the Settings "Add a category" form kept the schema default `sortOrder: 0` — so every type's admin-added categories collide at `0`. This task fixes that once, for existing data, independent of the Task 3 code fix (which only prevents *new* collisions going forward).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `tests/seed.test.ts`, update the import line from:
 
@@ -443,7 +443,7 @@ describe.skipIf(!hasDatabase)('normalizeCategorySortOrder (live database)', () =
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail (or skip)**
+- [x] **Step 2: Run the tests to verify they fail (or skip)**
 
 ```bash
 npm test -- seed
@@ -451,7 +451,7 @@ npm test -- seed
 
 Expected: FAIL with "normalizeCategorySortOrder is not a function" if `DATABASE_URL` is reachable in this environment, or SKIP (matching the existing `seedCategories` block's behavior) if it isn't. Either outcome is fine at this step — the point is confirming the import doesn't silently resolve to something that already passes.
 
-- [ ] **Step 3: Implement `normalizeCategorySortOrder`**
+- [x] **Step 3: Implement `normalizeCategorySortOrder`**
 
 Add to `prisma/seed.ts`, after `seedCategories`:
 
@@ -531,7 +531,7 @@ to:
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass (or skip)**
+- [x] **Step 4: Run the tests to verify they pass (or skip)**
 
 ```bash
 npm test -- seed
@@ -539,7 +539,7 @@ npm test -- seed
 
 Expected: PASS (or SKIP if `DATABASE_URL` is unreachable in this environment — matches the existing suite's behavior).
 
-- [ ] **Step 5: Run a type-check**
+- [x] **Step 5: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -547,7 +547,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add prisma/seed.ts tests/seed.test.ts
