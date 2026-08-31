@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client'
 import { ZodError } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, requireUser, AuthzError } from '@/lib/authz'
+import { isUniqueConstraintError } from '@/lib/actions/speakers'
 import { createEventSchema, serviceDateSchema, idSchema, friendlyValidationMessage } from '@/lib/validation'
 import { todayServiceDate, formatServiceDate } from '@/lib/dates'
 
@@ -52,9 +53,23 @@ export async function getOrCreateTodayEvent() {
   })
   if (existing) return existing
 
-  const event = await prisma.event.create({ data: { name, serviceDate } })
-  revalidatePath('/dashboard')
-  return event
+  try {
+    const event = await prisma.event.create({ data: { name, serviceDate } })
+    revalidatePath('/dashboard')
+    return event
+  } catch (error) {
+    // Two volunteers can both pass the findFirst check above and race to
+    // create — the compound [serviceDate, name] values are deterministic, so
+    // the loser's create fails with P2002, not a real conflict. Re-fetch and
+    // return the winner's row instead of surfacing an error page.
+    if (!isUniqueConstraintError(error)) throw error
+    const winner = await prisma.event.findFirst({
+      where: { serviceDate, isArchived: false },
+      orderBy: { name: 'asc' },
+    })
+    if (!winner) throw error
+    return winner
+  }
 }
 
 /**

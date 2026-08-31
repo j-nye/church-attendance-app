@@ -37,6 +37,11 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
+vi.mock('@/lib/actions/speakers', () => ({
+  isUniqueConstraintError: (error: unknown) =>
+    error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002',
+}))
+
 const {
   listEvents,
   createEvent,
@@ -153,6 +158,33 @@ describe('getOrCreateTodayEvent', () => {
     expect(result).toEqual({ id: 'new' })
     expect(eventCreate).toHaveBeenCalled()
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('re-fetches and returns the winner\'s row when create loses a concurrent-tap race (P2002)', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindFirst
+      .mockResolvedValueOnce(null) // initial check finds nothing
+      .mockResolvedValueOnce({ id: 'winner' }) // refetch after losing the create race
+    eventCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['serviceDate', 'name'] },
+      })
+    )
+
+    const result = await getOrCreateTodayEvent()
+
+    expect(result).toEqual({ id: 'winner' })
+    expect(eventFindFirst).toHaveBeenCalledTimes(2)
+  })
+
+  it('still throws a non-P2002 error from create', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindFirst.mockResolvedValue(null)
+    eventCreate.mockRejectedValue(new Error('connection reset'))
+
+    await expect(getOrCreateTodayEvent()).rejects.toThrow('connection reset')
   })
 })
 
