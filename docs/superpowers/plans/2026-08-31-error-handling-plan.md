@@ -597,7 +597,7 @@ git commit -m "feat: add friendlyValidationMessage for readable inline form erro
 - Consumes: `createCategory` (existing, unchanged), `AuthzError` (`src/lib/authz.ts`), `friendlyValidationMessage` (Task 3), `Prisma.PrismaClientKnownRequestError` (`@prisma/client`), `MAP_REGIONS` (`src/lib/map-regions.ts`).
 - Produces: `CategoryFormState` type and `createCategoryAction(prevState, formData): Promise<CategoryFormState>` (exported from `src/lib/actions/categories.ts`) and the `AddCategoryForm` component (exported from `src/components/AddCategoryForm.tsx`) — rendered by `/settings`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `tests/actions-categories.test.ts`. Add these imports at the top of the file, alongside the existing ones:
 
@@ -690,7 +690,7 @@ describe('createCategoryAction', () => {
 
 Note: `AuthzError` in this test file already comes from the file's own local `class AuthzError` (see the top of `tests/actions-categories.test.ts`) that the `@/lib/authz` mock re-exports — no new import needed for it.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- actions-categories
@@ -698,7 +698,7 @@ npm test -- actions-categories
 
 Expected: FAIL — `createCategoryAction` is not exported from `@/lib/actions/categories`.
 
-- [ ] **Step 3: Implement `createCategoryAction`**
+- [x] **Step 3: Implement `createCategoryAction`**
 
 In `src/lib/actions/categories.ts`, add these imports at the top of the file, alongside the existing ones:
 
@@ -751,7 +751,7 @@ export async function createCategoryAction(
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- actions-categories
@@ -759,7 +759,7 @@ npm test -- actions-categories
 
 Expected: PASS, all tests in the file including the 5 new ones.
 
-- [ ] **Step 5: Create `AddCategoryForm`**
+- [x] **Step 5: Create `AddCategoryForm`**
 
 Create `src/components/AddCategoryForm.tsx`:
 
@@ -817,7 +817,7 @@ export function AddCategoryForm() {
 }
 ```
 
-- [ ] **Step 6: Wire `AddCategoryForm` into the settings page**
+- [x] **Step 6: Wire `AddCategoryForm` into the settings page**
 
 In `src/app/settings/page.tsx`, add the import:
 
@@ -876,7 +876,7 @@ to:
 
 `createCategory` is still imported and used by `deactivateCategory`'s neighboring Retire form and by `createCategoryAction` inside `src/lib/actions/categories.ts` — no other change is needed to the settings page's existing `import { createCategory, deactivateCategory } from '@/lib/actions/categories'` line (only `createCategory`'s direct call site in the JSX moves out; the import itself becomes partially unused — see Step 7).
 
-- [ ] **Step 7: Remove the now-unused `createCategory` import if the type-checker/linter flags it**
+- [x] **Step 7: Remove the now-unused `createCategory` import if the type-checker/linter flags it**
 
 Since `createCategory` is no longer called directly from `src/app/settings/page.tsx` (it's now called from inside `createCategoryAction` in `categories.ts` instead), update the import line in `src/app/settings/page.tsx` from:
 
@@ -890,7 +890,7 @@ to:
 import { deactivateCategory } from '@/lib/actions/categories'
 ```
 
-- [ ] **Step 8: Run a type-check**
+- [x] **Step 8: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -898,7 +898,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 9: Run the full test suite**
+- [x] **Step 9: Run the full test suite**
 
 ```bash
 npm test
@@ -906,7 +906,7 @@ npm test
 
 Expected: all passing, including the 5 new tests from Step 1.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/lib/actions/categories.ts src/components/AddCategoryForm.tsx src/app/settings/page.tsx tests/actions-categories.test.ts

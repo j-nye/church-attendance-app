@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { Prisma } from '@prisma/client'
 
 const requireAdmin = vi.fn()
 const requireUser = vi.fn()
@@ -38,6 +39,7 @@ const {
   listActiveCategories,
   createCategory,
   deactivateCategory,
+  createCategoryAction,
 } = await import('@/lib/actions/categories')
 
 beforeEach(() => {
@@ -117,5 +119,73 @@ describe('deactivateCategory', () => {
       data: { isActive: false },
     })
     expect(revalidatePath).toHaveBeenCalledWith('/settings')
+  })
+})
+
+function categoryFormData(fields: Record<string, string>): FormData {
+  const data = new FormData()
+  for (const [key, value] of Object.entries(fields)) data.set(key, value)
+  return data
+}
+
+describe('createCategoryAction', () => {
+  it('returns { ok: true } and creates the category for valid input', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryCreate.mockResolvedValue({ id: '1' })
+
+    const result = await createCategoryAction({ ok: true }, categoryFormData({ name: 'Nursery', type: 'CLASSROOM' }))
+
+    expect(result).toEqual({ ok: true })
+    expect(categoryCreate).toHaveBeenCalledWith({
+      data: { name: 'Nursery', type: 'CLASSROOM', svgKey: null, countsTowardTotal: false },
+    })
+  })
+
+  it('returns a friendly inline message instead of throwing for a blank name', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+
+    const result = await createCategoryAction({ ok: true }, categoryFormData({ name: '', type: 'SECTION' }))
+
+    expect(result).toEqual({ ok: false, message: 'Name is required.' })
+    expect(categoryCreate).not.toHaveBeenCalled()
+  })
+
+  it('returns a friendly inline message for a duplicate name+type instead of crashing', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`name`,`type`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['name', 'type'] },
+      })
+    )
+
+    const result = await createCategoryAction(
+      { ok: true },
+      categoryFormData({ name: 'Nursery', type: 'CLASSROOM' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'A category with that name and type already exists.' })
+  })
+
+  it('returns a friendly inline message when the session is no longer an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+
+    const result = await createCategoryAction(
+      { ok: true },
+      categoryFormData({ name: 'Nursery', type: 'CLASSROOM' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'You are not authorized to do that.' })
+    expect(categoryCreate).not.toHaveBeenCalled()
+  })
+
+  it('rethrows an unexpected error so the app error boundary still catches it', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryCreate.mockRejectedValue(new Error('connection reset'))
+
+    await expect(
+      createCategoryAction({ ok: true }, categoryFormData({ name: 'Nursery', type: 'CLASSROOM' }))
+    ).rejects.toThrow('connection reset')
   })
 })

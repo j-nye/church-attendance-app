@@ -1,8 +1,8 @@
 import { requireAdminPage } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
-import { createCategory, deactivateCategory } from '@/lib/actions/categories'
+import { deactivateCategory } from '@/lib/actions/categories'
 import { addAllowlistEntry, deactivateAllowlistEntry, listAllowlist } from '@/lib/actions/allowlist'
-import { MAP_REGIONS } from '@/lib/map-regions'
+import { AddCategoryForm } from '@/components/AddCategoryForm'
 
 export default async function SettingsPage() {
   // Page-level gate. The actions below each re-check independently — this
@@ -21,38 +21,7 @@ export default async function SettingsPage() {
 
       <section className="card" style={{ marginBottom: 'var(--space-6)' }}>
         <h2 style={{ marginTop: 0 }}>Add a category</h2>
-        <form
-          action={async (formData: FormData) => {
-            'use server'
-            await createCategory({
-              name: formData.get('name'),
-              type: formData.get('type'),
-              svgKey: (formData.get('svgKey') as string) || null,
-              countsTowardTotal: formData.get('countsTowardTotal') === 'on',
-            })
-          }}
-          style={{ display: 'grid', gap: 'var(--space-3)' }}
-        >
-          <input name="name" placeholder="Name" required maxLength={60} style={{ padding: 'var(--space-3)' }} />
-          <select name="type" required style={{ padding: 'var(--space-3)' }}>
-            <option value="SECTION">Sanctuary section</option>
-            <option value="CLASSROOM">Classroom</option>
-            <option value="GROWTH_TRACK">Growth Track</option>
-            <option value="SERVE_TEAM">Serve team</option>
-            <option value="SERVICE_METRIC">Ministry metric</option>
-          </select>
-          <select name="svgKey" style={{ padding: 'var(--space-3)' }}>
-            <option value="">Not on the map (shows in the list)</option>
-            {MAP_REGIONS.map((region) => (
-              <option key={region.key} value={region.key}>{region.label}</option>
-            ))}
-          </select>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <input type="checkbox" name="countsTowardTotal" defaultChecked />
-            Counts toward Total Attendance
-          </label>
-          <button type="submit">Add category</button>
-        </form>
+        <AddCategoryForm />
         <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
           Map positions are fixed. A category not assigned to a map region still works — it
           appears in the list below the map on the entry screen.
