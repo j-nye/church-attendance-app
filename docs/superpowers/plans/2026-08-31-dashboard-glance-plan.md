@@ -215,7 +215,7 @@ git commit -m "feat: add ServiceCard component with lazy-loaded at-a-glance tota
 
 This task is UI wiring — no red/green test cycle, per the Global Constraints above. The header (`h1`, Settings link, `SignOutButton`) and the "Start counting today's service" form (`getOrCreateTodayEvent`) are untouched.
 
-- [ ] **Step 1: Replace the inline list markup**
+- [x] **Step 1: Replace the inline list markup**
 
 In `src/app/dashboard/page.tsx`, add the import:
 
@@ -259,7 +259,7 @@ to:
 
 `formatServiceDate` runs here, server-side, exactly as it did before — `ServiceCard` only ever receives the already-formatted display string, matching the spec's "plain serializable only" prop contract (`id`, `name`, `serviceDate: string`).
 
-- [ ] **Step 2: Run a type-check**
+- [x] **Step 2: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -267,7 +267,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 3: Run the full test suite**
+- [x] **Step 3: Run the full test suite**
 
 ```bash
 npm test
@@ -275,7 +275,7 @@ npm test
 
 Expected: all passing.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/dashboard/page.tsx

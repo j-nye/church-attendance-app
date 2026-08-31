@@ -3,6 +3,7 @@ import { requireUserPage } from '@/lib/authz'
 import { listEvents, getOrCreateTodayEvent } from '@/lib/actions/events'
 import { formatServiceDate } from '@/lib/dates'
 import { SignOutButton } from '@/components/SignOutButton'
+import { ServiceCard } from '@/components/ServiceCard'
 
 export default async function DashboardPage() {
   const user = await requireUserPage()
@@ -39,16 +40,12 @@ export default async function DashboardPage() {
 
       <ul style={{ listStyle: 'none', padding: 0, marginTop: 'var(--space-8)' }}>
         {events.map((event) => (
-          <li key={event.id} className="card" style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-4)' }}>
-            <strong>{event.name}</strong>
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-              {formatServiceDate(event.serviceDate)}
-            </div>
-            <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-              <Link href={`/entry/${event.id}`}>Enter counts</Link>
-              <Link href={`/report/${event.id}`}>Summary</Link>
-            </div>
-          </li>
+          <ServiceCard
+            key={event.id}
+            id={event.id}
+            name={event.name}
+            serviceDate={formatServiceDate(event.serviceDate)}
+          />
         ))}
       </ul>
     </main>
