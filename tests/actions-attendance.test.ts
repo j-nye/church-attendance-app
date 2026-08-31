@@ -11,6 +11,24 @@ const categoryFindMany = vi.fn()
 const attendanceUpsert = vi.fn()
 const attendanceFindMany = vi.fn()
 
+const txAttendanceFindUnique = vi.fn()
+const txAttendanceDeleteMany = vi.fn()
+const txAuditLogCreate = vi.fn()
+// The interactive-transaction callback is invoked for real here, against a
+// fake tx client, so deleteCount's actual transaction logic runs in tests —
+// not just the top-level prisma mock.
+const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+  callback({
+    attendanceRecord: {
+      findUnique: (...args: unknown[]) => txAttendanceFindUnique(...args),
+      deleteMany: (...args: unknown[]) => txAttendanceDeleteMany(...args),
+    },
+    auditLog: {
+      create: (...args: unknown[]) => txAuditLogCreate(...args),
+    },
+  })
+)
+
 class AuthzError extends Error {
   constructor(public readonly code: 'UNAUTHENTICATED' | 'FORBIDDEN') {
     super(code)
@@ -37,6 +55,7 @@ vi.mock('@/lib/prisma', () => ({
       upsert: (...args: unknown[]) => attendanceUpsert(...args),
       findMany: (...args: unknown[]) => attendanceFindMany(...args),
     },
+    $transaction: (...args: [callback: (tx: unknown) => Promise<unknown>]) => transaction(...args),
   },
 }))
 
@@ -44,7 +63,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
-const { saveCount, getEventCounts, getEventSummary, getExportRows, getManageRows } = await import(
+const { saveCount, getEventCounts, getEventSummary, getExportRows, getManageRows, deleteCount } = await import(
   '@/lib/actions/attendance'
 )
 
@@ -61,6 +80,10 @@ beforeEach(() => {
   categoryFindMany.mockReset()
   attendanceUpsert.mockReset()
   attendanceFindMany.mockReset()
+  transaction.mockClear()
+  txAttendanceFindUnique.mockReset()
+  txAttendanceDeleteMany.mockReset()
+  txAuditLogCreate.mockReset()
 })
 
 describe('saveCount', () => {
@@ -509,5 +532,83 @@ describe('getManageRows', () => {
       where: { eventId: 'e1' },
       include: { category: true },
     })
+  })
+})
+
+describe('deleteCount', () => {
+  it('requires an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(deleteCount({ eventId: 'e1', categoryId: 'c1' })).rejects.toThrow(AuthzError)
+    expect(eventFindUnique).not.toHaveBeenCalled()
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects when the event is archived', async () => {
+    requireAdmin.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue({ id: 'e1', isArchived: true })
+    await expect(deleteCount({ eventId: 'e1', categoryId: 'c1' })).rejects.toThrow(
+      'That service is not accepting counts'
+    )
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects when the event does not exist', async () => {
+    requireAdmin.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue(null)
+    await expect(deleteCount({ eventId: 'e1', categoryId: 'c1' })).rejects.toThrow(
+      'That service is not accepting counts'
+    )
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('deletes by the exact compound key when a record exists, and writes an AuditLog row capturing what was destroyed', async () => {
+    requireAdmin.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue({ id: 'e1', isArchived: false })
+    txAttendanceFindUnique.mockResolvedValue({ eventId: 'e1', categoryId: 'c1', count: 42 })
+    txAttendanceDeleteMany.mockResolvedValue({ count: 1 })
+    txAuditLogCreate.mockResolvedValue({})
+
+    const result = await deleteCount({ eventId: 'e1', categoryId: 'c1' })
+
+    expect(txAttendanceFindUnique).toHaveBeenCalledWith({
+      where: { eventId_categoryId: { eventId: 'e1', categoryId: 'c1' } },
+    })
+    expect(txAuditLogCreate).toHaveBeenCalledWith({
+      data: {
+        actorEmail: ADMIN.email,
+        action: 'DELETE_COUNT',
+        eventId: 'e1',
+        categoryId: 'c1',
+        priorCount: 42,
+      },
+    })
+    expect(txAttendanceDeleteMany).toHaveBeenCalledWith({ where: { eventId: 'e1', categoryId: 'c1' } })
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('is a silent no-op and writes no audit row when nothing matches', async () => {
+    requireAdmin.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue({ id: 'e1', isArchived: false })
+    txAttendanceFindUnique.mockResolvedValue(null)
+
+    const result = await deleteCount({ eventId: 'e1', categoryId: 'c1' })
+
+    expect(result).toEqual({ ok: true })
+    expect(txAuditLogCreate).not.toHaveBeenCalled()
+    expect(txAttendanceDeleteMany).not.toHaveBeenCalled()
+  })
+
+  it('revalidates the entry, report, and manage paths for the affected event on success', async () => {
+    requireAdmin.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue({ id: 'e1', isArchived: false })
+    txAttendanceFindUnique.mockResolvedValue({ eventId: 'e1', categoryId: 'c1', count: 42 })
+    txAttendanceDeleteMany.mockResolvedValue({ count: 1 })
+    txAuditLogCreate.mockResolvedValue({})
+
+    await deleteCount({ eventId: 'e1', categoryId: 'c1' })
+
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/e1')
+    expect(revalidatePath).toHaveBeenCalledWith('/report/e1')
+    expect(revalidatePath).toHaveBeenCalledWith('/report/e1/manage')
   })
 })

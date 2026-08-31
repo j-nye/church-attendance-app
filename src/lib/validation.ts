@@ -35,6 +35,11 @@ export const saveCountSchema = z.object({
   count: z.number().int().min(0).max(MAX_COUNT),
 })
 
+export const deleteCountSchema = z.object({
+  eventId: idSchema,
+  categoryId: idSchema,
+})
+
 export const createCategorySchema = z.object({
   name: z.string().trim().min(1).max(CATEGORY_NAME_MAX),
   type: categoryTypeSchema,

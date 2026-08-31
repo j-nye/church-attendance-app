@@ -433,7 +433,7 @@ git commit -m "feat: add getManageRows for the admin manage-records view"
 - Consumes: `requireAdmin()`, `prisma.event.findUnique` (existing), `prisma.$transaction` (new use), `Prisma.TransactionClient`'s `attendanceRecord.findUnique`/`deleteMany` and `auditLog.create` (from Task 1's model), `revalidatePath`.
 - Produces: `deleteCountSchema` (exported from `src/lib/validation.ts`). `deleteCount(input: unknown): Promise<{ ok: true }>` (exported from `src/lib/actions/attendance.ts`) — consumed by Task 4's `ManageTable`.
 
-- [ ] **Step 1: Write the failing test for the schema**
+- [x] **Step 1: Write the failing test for the schema**
 
 Add `deleteCountSchema` to the existing import line at the top of `tests/validation.test.ts`:
 
@@ -470,7 +470,7 @@ describe('deleteCountSchema', () => {
 })
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 npm test -- validation
@@ -478,7 +478,7 @@ npm test -- validation
 
 Expected: FAIL — `deleteCountSchema` is not exported yet, so the import resolves to `undefined` and `.parse` throws a `TypeError`.
 
-- [ ] **Step 3: Add `deleteCountSchema`**
+- [x] **Step 3: Add `deleteCountSchema`**
 
 In `src/lib/validation.ts`, add this after `saveCountSchema` (after line 36):
 
@@ -489,7 +489,7 @@ export const deleteCountSchema = z.object({
 })
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 npm test -- validation
@@ -497,7 +497,7 @@ npm test -- validation
 
 Expected: PASS, all 3 new tests plus the existing suite.
 
-- [ ] **Step 5: Write the failing tests for `deleteCount`**
+- [x] **Step 5: Write the failing tests for `deleteCount`**
 
 Extend `tests/actions-attendance.test.ts` further. Add the `$transaction` mock scaffolding — add these `const`s near the other mocks (after `const categoryFindMany = vi.fn()` from Task 2):
 
@@ -628,7 +628,7 @@ describe('deleteCount', () => {
 })
 ```
 
-- [ ] **Step 6: Run the tests to verify they fail**
+- [x] **Step 6: Run the tests to verify they fail**
 
 ```bash
 npm test -- actions-attendance
@@ -636,7 +636,7 @@ npm test -- actions-attendance
 
 Expected: FAIL — `deleteCount` is not exported from `@/lib/actions/attendance`.
 
-- [ ] **Step 7: Implement `deleteCount`**
+- [x] **Step 7: Implement `deleteCount`**
 
 Add the import at the top of `src/lib/actions/attendance.ts` (extend the existing `@/lib/validation` import):
 
@@ -690,7 +690,7 @@ export async function deleteCount(input: unknown) {
 }
 ```
 
-- [ ] **Step 8: Run the tests to verify they pass**
+- [x] **Step 8: Run the tests to verify they pass**
 
 ```bash
 npm test -- actions-attendance
@@ -698,7 +698,7 @@ npm test -- actions-attendance
 
 Expected: PASS, all tests in the file including the 5 new ones.
 
-- [ ] **Step 9: Run a type-check**
+- [x] **Step 9: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -706,7 +706,7 @@ npx tsc --noEmit
 
 Expected: clean — confirms `tx.auditLog.create` type-checks against Task 1's generated `AuditLog` model.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/lib/validation.ts src/lib/actions/attendance.ts tests/validation.test.ts tests/actions-attendance.test.ts

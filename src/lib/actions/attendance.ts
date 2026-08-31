@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { requireUser, requireAdmin } from '@/lib/authz'
-import { saveCountSchema, idSchema } from '@/lib/validation'
+import { saveCountSchema, deleteCountSchema, idSchema } from '@/lib/validation'
 import { TYPE_LABELS } from '@/lib/category-labels'
 
 /**
@@ -201,4 +201,46 @@ export async function getManageRows(eventId: string): Promise<ManageRow[]> {
   }
 
   return Array.from(rows.values())
+}
+
+/**
+ * Hard-deletes a specific record — the one truly irreversible action in an
+ * app that otherwise soft-deletes on principle. Reads the existing record
+ * inside an interactive transaction; if one exists, writes an AuditLog row
+ * and deletes it in that same transaction. If nothing matches (a
+ * double-click race, or the record is already gone), it's a silent no-op —
+ * no audit row, no error.
+ */
+export async function deleteCount(input: unknown) {
+  const user = await requireAdmin()
+  const { eventId, categoryId } = deleteCountSchema.parse(input)
+
+  const event = await prisma.event.findUnique({ where: { id: eventId } })
+  if (!event || event.isArchived) throw new Error('That service is not accepting counts')
+
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.attendanceRecord.findUnique({
+      where: { eventId_categoryId: { eventId, categoryId } },
+    })
+    if (!existing) return
+
+    // recordedBy/actorEmail come from the session — never from input.
+    await tx.auditLog.create({
+      data: {
+        actorEmail: user.email,
+        action: 'DELETE_COUNT',
+        eventId,
+        categoryId,
+        priorCount: existing.count,
+      },
+    })
+    // deleteMany, not delete — a double-click race (already gone by the
+    // second click) becomes a harmless no-op instead of a thrown P2025.
+    await tx.attendanceRecord.deleteMany({ where: { eventId, categoryId } })
+  })
+
+  revalidatePath(`/entry/${eventId}`)
+  revalidatePath(`/report/${eventId}`)
+  revalidatePath(`/report/${eventId}/manage`)
+  return { ok: true as const }
 }

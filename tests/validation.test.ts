@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   saveCountSchema,
+  deleteCountSchema,
   categoryTypeSchema,
   createCategorySchema,
   createEventSchema,
@@ -30,6 +31,22 @@ describe('saveCountSchema', () => {
 
   it('rejects a missing eventId', () => {
     expect(() => saveCountSchema.parse({ categoryId: valid.categoryId, count: 1 })).toThrow()
+  })
+})
+
+describe('deleteCountSchema', () => {
+  const valid = { eventId: 'clx0000000000000000000001', categoryId: 'clx0000000000000000000002' }
+
+  it('accepts a valid eventId/categoryId pair', () => {
+    expect(deleteCountSchema.parse(valid)).toEqual(valid)
+  })
+
+  it('rejects a missing categoryId', () => {
+    expect(() => deleteCountSchema.parse({ eventId: valid.eventId })).toThrow()
+  })
+
+  it('rejects an empty eventId', () => {
+    expect(() => deleteCountSchema.parse({ ...valid, eventId: '' })).toThrow()
   })
 })
 
