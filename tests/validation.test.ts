@@ -11,6 +11,9 @@ import {
   friendlyValidationMessage,
   CATEGORY_NAME_MAX,
   serviceDateSchema,
+  moveCategorySchema,
+  renameCategorySchema,
+  updateCategorySchema,
 } from '@/lib/validation'
 
 describe('saveCountSchema', () => {
@@ -187,6 +190,82 @@ describe('serviceDateSchema', () => {
 
   it('rejects a timestamp', () => {
     expect(() => serviceDateSchema.parse('2026-08-16T00:00:00Z')).toThrow()
+  })
+})
+
+describe('moveCategorySchema', () => {
+  it('accepts a valid id and direction', () => {
+    expect(moveCategorySchema.parse({ id: 'id1', direction: 'up' })).toEqual({
+      id: 'id1',
+      direction: 'up',
+    })
+  })
+
+  it('accepts "down" as a direction', () => {
+    expect(moveCategorySchema.parse({ id: 'id1', direction: 'down' }).direction).toBe('down')
+  })
+
+  it('rejects a direction that is not up or down', () => {
+    expect(() => moveCategorySchema.parse({ id: 'id1', direction: 'sideways' })).toThrow()
+  })
+
+  it('rejects an empty id', () => {
+    expect(() => moveCategorySchema.parse({ id: '', direction: 'up' })).toThrow()
+  })
+})
+
+describe('renameCategorySchema', () => {
+  it('accepts a valid id and name', () => {
+    expect(renameCategorySchema.parse({ id: 'id1', name: 'New Name' })).toEqual({
+      id: 'id1',
+      name: 'New Name',
+    })
+  })
+
+  it('rejects an empty name', () => {
+    expect(() => renameCategorySchema.parse({ id: 'id1', name: '' })).toThrow()
+  })
+
+  it('rejects a name longer than CATEGORY_NAME_MAX characters', () => {
+    expect(() =>
+      renameCategorySchema.parse({ id: 'id1', name: 'x'.repeat(CATEGORY_NAME_MAX + 1) })
+    ).toThrow()
+  })
+
+  it('trims whitespace from the name', () => {
+    expect(renameCategorySchema.parse({ id: 'id1', name: '  Nursery  ' }).name).toBe('Nursery')
+  })
+})
+
+describe('updateCategorySchema', () => {
+  const valid = { id: 'id1', type: 'SECTION' as const, countsTowardTotal: true, svgKey: 'left-wing' }
+
+  it('accepts a valid update with a svgKey', () => {
+    expect(updateCategorySchema.parse(valid)).toEqual(valid)
+  })
+
+  it('accepts a null svgKey', () => {
+    expect(updateCategorySchema.parse({ ...valid, svgKey: null })).toEqual({ ...valid, svgKey: null })
+  })
+
+  it('rejects an invalid type', () => {
+    expect(() => updateCategorySchema.parse({ ...valid, type: 'BOGUS' })).toThrow()
+  })
+
+  it('rejects a missing countsTowardTotal', () => {
+    const { countsTowardTotal: _omit, ...rest } = valid
+    expect(() => updateCategorySchema.parse(rest)).toThrow()
+  })
+
+  it('rejects an empty id', () => {
+    expect(() => updateCategorySchema.parse({ ...valid, id: '' })).toThrow()
+  })
+})
+
+describe('friendlyValidationMessage — service date field label', () => {
+  it('reports a bad service date using the "Service date" label, not the raw field name', () => {
+    const { error } = createEventSchema.safeParse({ name: 'Sunday', serviceDate: 'not-a-date' })
+    expect(friendlyValidationMessage(error!)).toBe('Service date is not valid.')
   })
 })
 

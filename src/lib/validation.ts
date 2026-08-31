@@ -63,8 +63,19 @@ export const createCategorySchema = z.object({
 
 export const updateCategorySchema = z.object({
   id: idSchema,
+  type: categoryTypeSchema,
+  countsTowardTotal: z.boolean(),
+  svgKey: z.string().trim().max(40).nullable(),
+})
+
+export const moveCategorySchema = z.object({
+  id: idSchema,
+  direction: z.enum(['up', 'down']),
+})
+
+export const renameCategorySchema = z.object({
+  id: idSchema,
   name: z.string().trim().min(1).max(CATEGORY_NAME_MAX),
-  sortOrder: z.number().int().min(0).max(999),
 })
 
 export const createEventSchema = z.object({
@@ -98,6 +109,7 @@ const FIELD_LABELS: Record<string, string> = {
   type: 'Category type',
   email: 'Email address',
   role: 'Role',
+  serviceDate: 'Service date',
 }
 
 export function friendlyValidationMessage(error: z.ZodError): string {
@@ -115,7 +127,9 @@ export function friendlyValidationMessage(error: z.ZodError): string {
     case 'too_big':
       return `${label} is too long.`
     case 'invalid_format':
-      return `${label} doesn't look like a valid email address.`
+      return issue.format === 'email'
+        ? `${label} doesn't look like a valid email address.`
+        : `${label} is not valid.`
     case 'invalid_value':
       return `${label} must be one of the listed options.`
     default:

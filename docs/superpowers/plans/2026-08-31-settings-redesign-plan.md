@@ -40,7 +40,7 @@
 - Produces: `moveCategorySchema`, `renameCategorySchema`, a redefined `updateCategorySchema` (from `src/lib/validation.ts`); `nextSundayServiceDate(from?: Date): string` (from `src/lib/dates.ts`). Consumed by Tasks 3–8.
 - Note: `src/lib/validation.ts` already exports an `updateCategorySchema` of shape `{ id, name, sortOrder }`, left over from the `renameCategory`/`reactivateCategory` actions removed in `d22dd23`. Nothing in the codebase imports it today (confirmed by grep). This task repurposes the name for the new `updateCategory` action's actual shape (`{ id, type, countsTowardTotal, svgKey }`) rather than carrying two competing conventions — there is no caller to migrate.
 
-- [ ] **Step 1: Write the failing validation tests**
+- [x] **Step 1: Write the failing validation tests**
 
 In `tests/validation.test.ts`, update the import block at the top from:
 
@@ -161,7 +161,7 @@ describe('friendlyValidationMessage — service date field label', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- validation
@@ -169,7 +169,7 @@ npm test -- validation
 
 Expected: FAIL — `moveCategorySchema` and `renameCategorySchema` are not exported yet, and `updateCategorySchema` still has the old `{ id, name, sortOrder }` shape so the new-shape tests fail too.
 
-- [ ] **Step 3: Add the schemas and the field label**
+- [x] **Step 3: Add the schemas and the field label**
 
 In `src/lib/validation.ts`, replace the existing `updateCategorySchema` block:
 
@@ -225,7 +225,7 @@ const FIELD_LABELS: Record<string, string> = {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- validation
@@ -233,7 +233,7 @@ npm test -- validation
 
 Expected: PASS, all new tests plus the existing suite.
 
-- [ ] **Step 5: Write the failing test for `nextSundayServiceDate`**
+- [x] **Step 5: Write the failing test for `nextSundayServiceDate`**
 
 In `tests/dates.test.ts`, update the import line from:
 
@@ -280,7 +280,7 @@ describe('nextSundayServiceDate', () => {
 })
 ```
 
-- [ ] **Step 6: Run the test to verify it fails**
+- [x] **Step 6: Run the test to verify it fails**
 
 ```bash
 npm test -- dates
@@ -288,7 +288,7 @@ npm test -- dates
 
 Expected: FAIL — `nextSundayServiceDate` is not exported from `@/lib/dates`.
 
-- [ ] **Step 7: Implement `nextSundayServiceDate`**
+- [x] **Step 7: Implement `nextSundayServiceDate`**
 
 Add to the end of `src/lib/dates.ts`:
 
@@ -318,7 +318,7 @@ export function nextSundayServiceDate(from: Date = new Date()): string {
 }
 ```
 
-- [ ] **Step 8: Run the tests to verify they pass**
+- [x] **Step 8: Run the tests to verify they pass**
 
 ```bash
 npm test -- dates
@@ -326,7 +326,7 @@ npm test -- dates
 
 Expected: PASS, all 5 new tests plus the existing suite.
 
-- [ ] **Step 9: Run a type-check**
+- [x] **Step 9: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -334,7 +334,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/lib/validation.ts src/lib/dates.ts tests/validation.test.ts tests/dates.test.ts
