@@ -6,6 +6,7 @@ import {
   createCategorySchema,
   createEventSchema,
   allowlistEntrySchema,
+  friendlyValidationMessage,
   CATEGORY_NAME_MAX,
   serviceDateSchema,
 } from '@/lib/validation'
@@ -134,5 +135,32 @@ describe('serviceDateSchema', () => {
 
   it('rejects a timestamp', () => {
     expect(() => serviceDateSchema.parse('2026-08-16T00:00:00Z')).toThrow()
+  })
+})
+
+describe('friendlyValidationMessage', () => {
+  it('reports a blank required field by name, not Zod\'s raw wording', () => {
+    const { error } = createCategorySchema.safeParse({ name: '', type: 'SECTION' })
+    expect(friendlyValidationMessage(error!)).toBe('Name is required.')
+  })
+
+  it('reports an invalid enum value by field name', () => {
+    const { error } = createCategorySchema.safeParse({ name: 'Nursery', type: 'BOGUS' })
+    expect(friendlyValidationMessage(error!)).toBe('Category type must be one of the listed options.')
+  })
+
+  it('reports a malformed email as an email problem', () => {
+    const { error } = allowlistEntrySchema.safeParse({ email: 'not-an-email', role: 'ADMIN' })
+    expect(friendlyValidationMessage(error!)).toBe("Email address doesn't look like a valid email address.")
+  })
+
+  it('reports an over-length email as too long', () => {
+    const { error } = allowlistEntrySchema.safeParse({ email: `${'x'.repeat(300)}@example.com`, role: 'ADMIN' })
+    expect(friendlyValidationMessage(error!)).toBe('Email address is too long.')
+  })
+
+  it('falls back to a generic message for a field it does not recognize', () => {
+    const { error } = saveCountSchema.safeParse({ categoryId: 'c1', count: 1 }) // eventId missing entirely
+    expect(friendlyValidationMessage(error!)).toBe('That field is required.')
   })
 })

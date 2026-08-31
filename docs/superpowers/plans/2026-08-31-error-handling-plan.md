@@ -458,7 +458,7 @@ git commit -m "feat: add app-level error boundary with a retry fallback"
 - Consumes: `z.ZodError` (from the `zod` package, already a dependency).
 - Produces: `friendlyValidationMessage(error: z.ZodError): string` (exported from `src/lib/validation.ts`) — consumed by Task 4's `createCategoryAction` and Task 5's `addAllowlistEntryAction`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add `friendlyValidationMessage` to the existing import line at the top of `tests/validation.test.ts`:
 
@@ -507,7 +507,7 @@ describe('friendlyValidationMessage', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- validation
@@ -515,7 +515,7 @@ npm test -- validation
 
 Expected: FAIL — `friendlyValidationMessage` is not exported from `@/lib/validation`, so the import resolves to `undefined` and calling it throws a `TypeError`.
 
-- [ ] **Step 3: Implement `friendlyValidationMessage`**
+- [x] **Step 3: Implement `friendlyValidationMessage`**
 
 In `src/lib/validation.ts`, add at the end of the file:
 
@@ -560,7 +560,7 @@ export function friendlyValidationMessage(error: z.ZodError): string {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- validation
@@ -568,7 +568,7 @@ npm test -- validation
 
 Expected: PASS, all 5 new tests plus the existing suite.
 
-- [ ] **Step 5: Run a type-check**
+- [x] **Step 5: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -576,7 +576,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/validation.ts tests/validation.test.ts
