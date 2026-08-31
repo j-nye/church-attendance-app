@@ -44,7 +44,7 @@
 
 This task is pure UI composition with no new business logic — no red/green cycle. Verification is a type-check, the existing suite staying green, and the manual checklist in Task 3.
 
-- [ ] **Step 1: Create `AppHeader`**
+- [x] **Step 1: Create `AppHeader`**
 
 Create `src/components/AppHeader.tsx`:
 
@@ -93,7 +93,7 @@ export function AppHeader({ helpAnchor }: { helpAnchor?: string }) {
 }
 ```
 
-- [ ] **Step 2: Wire into the dashboard, and remove the old Sign-out placement**
+- [x] **Step 2: Wire into the dashboard, and remove the old Sign-out placement**
 
 `src/app/dashboard/page.tsx` currently renders its own `SignOutButton` inside a page-level `<header>`. That placement is removed — `AppHeader` is now the only Sign-out control anywhere. `helpAnchor` is omitted here on purpose: the dashboard lists every service and both entry points (Enter counts, Summary), so no single `/help` section fits better than the top of the page.
 
@@ -167,7 +167,7 @@ to:
 
 (Re-indent the body between `<header>...</header>` and the closing tags by two spaces to match the new nesting — a plain visual re-indent, no logic changes. `npm run lint` in Step 6 below will catch anything missed.)
 
-- [ ] **Step 3: Wire into the entry page**
+- [x] **Step 3: Wire into the entry page**
 
 `src/app/entry/[eventId]/page.tsx` passes `helpAnchor="counting"` — the entry screen is exactly what `#counting` documents.
 
@@ -204,7 +204,7 @@ to:
   )
 ```
 
-- [ ] **Step 4: Wire into the report page**
+- [x] **Step 4: Wire into the report page**
 
 `src/app/report/[eventId]/page.tsx` passes `helpAnchor="reports"`. Its own header (event name, speakers, Manage Records / Download CSV / Print) stays exactly as it is, inside `<main>`, below the new `AppHeader` strip.
 
@@ -253,7 +253,7 @@ to:
 
 (As in Step 2, re-indent the body between the two changed lines by two spaces — visual only.)
 
-- [ ] **Step 5: Wire into the manage page and settings page**
+- [x] **Step 5: Wire into the manage page and settings page**
 
 `src/app/report/[eventId]/manage/page.tsx` passes `helpAnchor="manage"` — a direct match for `#manage`.
 
@@ -339,7 +339,7 @@ to:
 
 (As in the earlier steps, re-indent the body between the two changed lines by two spaces — visual only — in both `manage/page.tsx` and `settings/page.tsx`.)
 
-- [ ] **Step 6: Type-check and lint**
+- [x] **Step 6: Type-check and lint**
 
 ```bash
 npx tsc --noEmit
@@ -348,7 +348,7 @@ npm run lint
 
 Expected: both clean. Lint will also catch any indentation left inconsistent by the re-indent steps above.
 
-- [ ] **Step 7: Run the full test suite**
+- [x] **Step 7: Run the full test suite**
 
 ```bash
 npm test
@@ -356,7 +356,7 @@ npm test
 
 Expected: all passing — this task adds no new tests but must not break anything existing (in particular, no existing test should be asserting on the dashboard's old inline `<header>`/`SignOutButton` structure; if one is, update it to reflect the new structure, not to preserve the old one).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/components/AppHeader.tsx "src/app/dashboard/page.tsx" "src/app/entry/[eventId]/page.tsx" "src/app/report/[eventId]/page.tsx" "src/app/report/[eventId]/manage/page.tsx" src/app/settings/page.tsx
@@ -376,7 +376,7 @@ git commit -m "feat: add shared AppHeader with Help deep-links and Sign out"
 
 Pure static content — no red/green cycle. Verification is a type-check, the full suite staying green, and the manual deep-link checklist in Task 3.
 
-- [ ] **Step 1: Create the help page**
+- [x] **Step 1: Create the help page**
 
 Create `src/app/help/page.tsx`. Content covers only what's actually shipped today (verified against `src/components/CounterDialog.tsx`, `src/components/SpeakerDialog.tsx`, `src/components/ManageTable.tsx`, `src/app/api/export/route.ts`, `src/app/settings/page.tsx`, and `src/lib/actions/attendance.ts`'s `getEventSummary`). No `#services` section — `createEvent`/`archiveEvent` exist in `src/lib/actions/events.ts` but aren't wired into any page yet; that section, and the reorder/rename/un-retire/delete parts of `#categories`, land with the Phase 2e settings redesign under the same anchor ids already reserved by the spec.
 
@@ -552,7 +552,7 @@ export default async function HelpPage() {
 }
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 ```bash
 npx tsc --noEmit
@@ -560,7 +560,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 3: Run the full test suite**
+- [x] **Step 3: Run the full test suite**
 
 ```bash
 npm test
@@ -568,7 +568,7 @@ npm test
 
 Expected: all passing.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/help/page.tsx
@@ -581,7 +581,7 @@ git commit -m "feat: add /help page with task-oriented sections"
 
 **Files:** none (verification only — no commit at the end of this task unless a check below turns up a fix that needs one).
 
-- [ ] **Step 1: Lint**
+- [x] **Step 1: Lint**
 
 ```bash
 npm run lint
@@ -589,7 +589,7 @@ npm run lint
 
 Expected: clean.
 
-- [ ] **Step 2: Full test suite**
+- [x] **Step 2: Full test suite**
 
 ```bash
 npm test
@@ -597,7 +597,7 @@ npm test
 
 Expected: all specs passing.
 
-- [ ] **Step 3: Type-check**
+- [x] **Step 3: Type-check**
 
 ```bash
 npx tsc --noEmit
