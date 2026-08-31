@@ -1194,7 +1194,7 @@ git commit -m "feat: render add-allowlist form errors inline instead of crashing
 
 **Files:** none (verification only — no commit at the end of this task unless a check below turns up a fix that needs one).
 
-- [ ] **Step 1: Lint**
+- [x] **Step 1: Lint**
 
 ```bash
 npm run lint
@@ -1202,7 +1202,7 @@ npm run lint
 
 Expected: clean.
 
-- [ ] **Step 2: Full test suite**
+- [x] **Step 2: Full test suite**
 
 ```bash
 npm test
@@ -1210,7 +1210,7 @@ npm test
 
 Expected: all specs passing, including every test added in Tasks 1, 3, 4, and 5.
 
-- [ ] **Step 3: Type-check**
+- [x] **Step 3: Type-check**
 
 ```bash
 npx tsc --noEmit
