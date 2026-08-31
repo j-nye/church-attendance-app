@@ -1,11 +1,11 @@
 import Link from 'next/link'
-import { requireUser } from '@/lib/authz'
+import { requireUserPage } from '@/lib/authz'
 import { listEvents, getOrCreateTodayEvent } from '@/lib/actions/events'
 import { formatServiceDate } from '@/lib/dates'
 import { SignOutButton } from '@/components/SignOutButton'
 
 export default async function DashboardPage() {
-  const user = await requireUser()
+  const user = await requireUserPage()
   const events = await listEvents()
 
   return (

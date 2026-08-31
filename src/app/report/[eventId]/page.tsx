@@ -3,11 +3,11 @@ import { getEventSummary } from '@/lib/actions/attendance'
 import { PrintButton } from '@/components/PrintButton'
 import { formatServiceDate } from '@/lib/dates'
 import { TYPE_LABELS } from '@/lib/category-labels'
-import { requireUser } from '@/lib/authz'
+import { requireUserPage } from '@/lib/authz'
 
 export default async function ReportPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params
-  const [user, { event, rows, totals }] = await Promise.all([requireUser(), getEventSummary(eventId)])
+  const [user, { event, rows, totals }] = await Promise.all([requireUserPage(), getEventSummary(eventId)])
 
   return (
     <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>

@@ -1,13 +1,14 @@
-import { requireAdmin } from '@/lib/authz'
+import { requireAdminPage } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
 import { createCategory, deactivateCategory } from '@/lib/actions/categories'
 import { addAllowlistEntry, deactivateAllowlistEntry, listAllowlist } from '@/lib/actions/allowlist'
 import { MAP_REGIONS } from '@/lib/map-regions'
 
 export default async function SettingsPage() {
-  // Page-level gate. The actions below each re-check independently —
-  // this call is convenience, not the boundary.
-  await requireAdmin()
+  // Page-level gate. The actions below each re-check independently — this
+  // call is convenience, not the boundary. On AuthzError it redirects to
+  // /denied instead of leaving Next's raw error screen as the only outcome.
+  await requireAdminPage()
 
   const [categories, allowlist] = await Promise.all([
     prisma.category.findMany({ orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }] }),

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { requireAdmin } from '@/lib/authz'
+import { requireAdminPage } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
 import { getManageRows } from '@/lib/actions/attendance'
 import { formatServiceDate } from '@/lib/dates'
@@ -7,8 +7,10 @@ import { ManageTable } from '@/components/ManageTable'
 
 export default async function ManagePage({ params }: { params: Promise<{ eventId: string }> }) {
   // Page-level gate. getManageRows and deleteCount each re-check independently —
-  // this call is convenience, not the boundary (same pattern as /settings).
-  await requireAdmin()
+  // this call is convenience, not the boundary (same pattern as /settings). On
+  // AuthzError it redirects to /denied instead of leaving Next's raw error
+  // screen as the only outcome.
+  await requireAdminPage()
   const { eventId } = await params
 
   const event = await prisma.event.findUnique({ where: { id: eventId } })

@@ -2,12 +2,12 @@ import { EntryClient } from './EntryClient'
 import { listActiveCategories } from '@/lib/actions/categories'
 import { getEventCounts } from '@/lib/actions/attendance'
 import { prisma } from '@/lib/prisma'
-import { requireUser } from '@/lib/authz'
+import { requireUserPage } from '@/lib/authz'
 import { formatServiceDate } from '@/lib/dates'
 import { notFound } from 'next/navigation'
 
 export default async function EntryPage({ params }: { params: Promise<{ eventId: string }> }) {
-  await requireUser()
+  await requireUserPage()
   const { eventId } = await params
 
   const event = await prisma.event.findUnique({ where: { id: eventId } })

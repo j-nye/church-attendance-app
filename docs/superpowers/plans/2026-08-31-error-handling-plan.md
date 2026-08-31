@@ -66,7 +66,7 @@ Given AGENTS.md's own warning that this codebase already runs bleeding-edge (Nex
 - Consumes: `requireUser()`, `requireAdmin()`, `AuthzError` (all already in `src/lib/authz.ts`); `redirect` from `next/navigation`.
 - Produces: `requireUserPage(): Promise<CurrentUser>` and `requireAdminPage(): Promise<CurrentUser>` (exported from `src/lib/authz.ts`) — consumed by all five page files below.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `tests/authz.test.ts`. Add a `next/navigation` mock near the top, after the existing `vi.mock` calls (its `redirect` throws, exactly like the real one, so a test asserting "no crash" can't accidentally pass just because the mock silently returns):
 
@@ -137,7 +137,7 @@ describe('requireAdminPage', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- authz
@@ -145,7 +145,7 @@ npm test -- authz
 
 Expected: FAIL — `requireUserPage`/`requireAdminPage` are not exported from `@/lib/authz`, so the destructured import is `undefined` and calling it throws a `TypeError`.
 
-- [ ] **Step 3: Implement the helpers**
+- [x] **Step 3: Implement the helpers**
 
 In `src/lib/authz.ts`, add the import and the two new functions at the end of the file:
 
@@ -188,7 +188,7 @@ export async function requireAdminPage(): Promise<CurrentUser> {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- authz
@@ -196,7 +196,7 @@ npm test -- authz
 
 Expected: PASS, all tests in the file including the 6 new ones.
 
-- [ ] **Step 5: Switch all five page-level gates to the `*Page()` variants**
+- [x] **Step 5: Switch all five page-level gates to the `*Page()` variants**
 
 In `src/app/dashboard/page.tsx`, change:
 
@@ -329,7 +329,7 @@ to:
   await requireAdminPage()
 ```
 
-- [ ] **Step 6: Run a type-check**
+- [x] **Step 6: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -337,7 +337,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 7: Run the full test suite**
+- [x] **Step 7: Run the full test suite**
 
 ```bash
 npm test
@@ -345,7 +345,7 @@ npm test
 
 Expected: all passing — this step touches no Server Action logic, only page-level gates, so no existing test should be affected.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/lib/authz.ts tests/authz.test.ts src/app/dashboard/page.tsx "src/app/entry/[eventId]/page.tsx" "src/app/report/[eventId]/page.tsx" src/app/settings/page.tsx "src/app/report/[eventId]/manage/page.tsx"
