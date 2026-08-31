@@ -990,7 +990,7 @@ git commit -m "feat: append speaker rows to the CSV export"
 
 This task is UI wiring around already-tested Server Actions — matching this project's convention of not adding new automated tests for pure UI composition (see the attendance-CRUD plan's Task 4). Verification here is a type-check, the full existing suite staying green, and the manual checklist in Task 6.
 
-- [ ] **Step 1: Add `onSelectStage`/`speakerCount` to `SanctuaryMap`**
+- [x] **Step 1: Add `onSelectStage`/`speakerCount` to `SanctuaryMap`**
 
 The Stage region (`region.key === 'stage'`) is handled as its own branch, deliberately duplicating the render logic of the existing category-driven branch rather than threading extra conditionals through it — this guarantees every other region's behavior is byte-for-byte unchanged. Replace the whole file, `src/components/SanctuaryMap.tsx`, with:
 
@@ -1144,7 +1144,7 @@ export function SanctuaryMap({
 }
 ```
 
-- [ ] **Step 2: Create `SpeakerDialog`**
+- [x] **Step 2: Create `SpeakerDialog`**
 
 `addSpeaker` doesn't return the created row (and a duplicate-name P2002 is a caught no-op with no new id at all), so there's no server-issued id to attach to a freshly-added name locally. Rather than fabricate a client-side id — which would silently break Remove the moment the fabricated id doesn't match the real database row — `handleAdd` refetches the authoritative list via `listSpeakers` on success. `handleRemove` already knows the real id (it came from the list), so it updates local state directly with no refetch.
 
@@ -1286,7 +1286,7 @@ export function SpeakerDialog({
 }
 ```
 
-- [ ] **Step 3: Wire the dialog into `EntryClient`**
+- [x] **Step 3: Wire the dialog into `EntryClient`**
 
 In `src/app/entry/[eventId]/EntryClient.tsx`, add the import:
 
@@ -1362,7 +1362,7 @@ Add the dialog render, as a sibling of the existing `CounterDialog` render (afte
       )}
 ```
 
-- [ ] **Step 4: Fetch speakers in the entry page**
+- [x] **Step 4: Fetch speakers in the entry page**
 
 In `src/app/entry/[eventId]/page.tsx`, add the import:
 
@@ -1404,7 +1404,7 @@ to:
 
 `listSpeakers` already returns plain `{ id, name }[]` — no `Date` fields, so (unlike the manage page's `updatedAt` conversion) no serialization mapping is needed before handing it to the client component.
 
-- [ ] **Step 5: Run a type-check**
+- [x] **Step 5: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -1412,7 +1412,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 6: Run the full test suite**
+- [x] **Step 6: Run the full test suite**
 
 ```bash
 npm test
@@ -1420,7 +1420,7 @@ npm test
 
 Expected: all passing — this task adds no new tests but must not break anything existing.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/components/SanctuaryMap.tsx src/components/SpeakerDialog.tsx "src/app/entry/[eventId]/EntryClient.tsx" "src/app/entry/[eventId]/page.tsx"
