@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import { prisma } from '@/lib/prisma'
 import { seedCategories, DEFAULT_CATEGORIES } from '../prisma/seed'
+import { isDatabaseReachable } from './db-probe'
 
-const hasDatabase = Boolean(process.env.DATABASE_URL)
+// DATABASE_URL being set isn't enough to prove the suite can actually run —
+// it might point at a database that's unreachable from this environment
+// (Neon down, no outbound network, etc). Without this probe, the first query
+// below would hang until Vitest's per-test timeout and every test would
+// report as failed instead of skipped. The probe is a bare TCP connect
+// capped at ~2s, so an unreachable DB skips quickly instead of cascading
+// into a wall of 5s timeouts.
+const hasDatabase =
+  Boolean(process.env.DATABASE_URL) && (await isDatabaseReachable(process.env.DATABASE_URL!))
 
 describe.skipIf(!hasDatabase)('seedCategories (live database)', () => {
   it('retires a category that is on the retired list, even if it was re-activated', async () => {
