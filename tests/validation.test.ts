@@ -253,7 +253,8 @@ describe('updateCategorySchema', () => {
   })
 
   it('rejects a missing countsTowardTotal', () => {
-    const { countsTowardTotal: _omit, ...rest } = valid
+    const rest: Record<string, unknown> = { ...valid }
+    delete rest.countsTowardTotal
     expect(() => updateCategorySchema.parse(rest)).toThrow()
   })
 
