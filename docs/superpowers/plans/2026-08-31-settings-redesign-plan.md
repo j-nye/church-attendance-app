@@ -992,7 +992,7 @@ git commit -m "feat: give createCategory a real sortOrder and add moveCategory"
 
 These re-add (in spirit, not verbatim) the `renameCategory`/`reactivateCategory` actions removed as unused in `d22dd23` — see that commit's diff for the pre-redesign shape. `renameCategory` is unchanged in spirit (still just a name update); `reactivateCategory` now also reassigns `sortOrder` to the end of the active list (the old version didn't, because ordering didn't exist yet).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `tests/actions-categories.test.ts`. Add a mock (after `const categoryAggregate = vi.fn()` from Task 3):
 
@@ -1165,7 +1165,7 @@ describe('reactivateCategory', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- actions-categories
@@ -1173,7 +1173,7 @@ npm test -- actions-categories
 
 Expected: FAIL — `renameCategory`, `renameCategoryAction`, and `reactivateCategory` aren't exported yet.
 
-- [ ] **Step 3: Implement `renameCategory`, `renameCategoryAction`, and `reactivateCategory`**
+- [x] **Step 3: Implement `renameCategory`, `renameCategoryAction`, and `reactivateCategory`**
 
 Update the import line at the top of `src/lib/actions/categories.ts` from:
 
@@ -1258,7 +1258,7 @@ export async function reactivateCategory(input: unknown) {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- actions-categories
@@ -1266,7 +1266,7 @@ npm test -- actions-categories
 
 Expected: PASS, all tests including every one added in this task.
 
-- [ ] **Step 5: Run a type-check**
+- [x] **Step 5: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -1274,7 +1274,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/actions/categories.ts tests/actions-categories.test.ts

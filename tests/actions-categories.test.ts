@@ -9,6 +9,7 @@ const categoryFindMany = vi.fn()
 const categoryCreate = vi.fn()
 const categoryUpdate = vi.fn()
 const categoryAggregate = vi.fn()
+const categoryFindUnique = vi.fn()
 const txCategoryFindUnique = vi.fn()
 const txCategoryFindFirst = vi.fn()
 const txCategoryUpdate = vi.fn()
@@ -44,6 +45,7 @@ vi.mock('@/lib/prisma', () => ({
       create: (...args: unknown[]) => categoryCreate(...args),
       update: (...args: unknown[]) => categoryUpdate(...args),
       aggregate: (...args: unknown[]) => categoryAggregate(...args),
+      findUnique: (...args: unknown[]) => categoryFindUnique(...args),
     },
     $transaction: (...args: [callback: (tx: unknown) => Promise<unknown>]) => transaction(...args),
   },
@@ -53,8 +55,16 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
-const { listActiveCategories, createCategory, deactivateCategory, createCategoryAction, moveCategory } =
-  await import('@/lib/actions/categories')
+const {
+  listActiveCategories,
+  createCategory,
+  deactivateCategory,
+  createCategoryAction,
+  moveCategory,
+  renameCategory,
+  renameCategoryAction,
+  reactivateCategory,
+} = await import('@/lib/actions/categories')
 
 beforeEach(() => {
   requireAdmin.mockReset()
@@ -64,6 +74,7 @@ beforeEach(() => {
   categoryCreate.mockReset()
   categoryUpdate.mockReset()
   categoryAggregate.mockReset()
+  categoryFindUnique.mockReset()
   transaction.mockClear()
   txCategoryFindUnique.mockReset()
   txCategoryFindFirst.mockReset()
@@ -268,6 +279,138 @@ describe('moveCategory', () => {
     await moveCategory({ id: 'id1', direction: 'up' })
 
     expect(revalidatePath).not.toHaveBeenCalled()
+  })
+})
+
+describe('renameCategory', () => {
+  it('rejects a non-admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(renameCategory({ id: 'id1', name: 'New' })).rejects.toThrow(AuthzError)
+    expect(categoryUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects an empty name', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    await expect(renameCategory({ id: 'id1', name: '' })).rejects.toThrow()
+    expect(categoryUpdate).not.toHaveBeenCalled()
+  })
+
+  it('renames the category and revalidates settings and every entry page', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryUpdate.mockResolvedValue({ id: 'id1', name: 'New Name' })
+
+    await renameCategory({ id: 'id1', name: 'New Name' })
+
+    expect(categoryUpdate).toHaveBeenCalledWith({ where: { id: 'id1' }, data: { name: 'New Name' } })
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/[eventId]', 'page')
+  })
+})
+
+function renameFormData(fields: Record<string, string>): FormData {
+  const data = new FormData()
+  for (const [key, value] of Object.entries(fields)) data.set(key, value)
+  return data
+}
+
+describe('renameCategoryAction', () => {
+  it('returns { ok: true } and renames the category for valid input', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryUpdate.mockResolvedValue({ id: 'id1', name: 'New Name' })
+
+    const result = await renameCategoryAction({ ok: true }, renameFormData({ id: 'id1', name: 'New Name' }))
+
+    expect(result).toEqual({ ok: true })
+    expect(categoryUpdate).toHaveBeenCalledWith({ where: { id: 'id1' }, data: { name: 'New Name' } })
+  })
+
+  it('returns a friendly inline message instead of throwing for a blank name', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+
+    const result = await renameCategoryAction({ ok: true }, renameFormData({ id: 'id1', name: '' }))
+
+    expect(result).toEqual({ ok: false, message: 'Name is required.' })
+    expect(categoryUpdate).not.toHaveBeenCalled()
+  })
+
+  it('returns a friendly inline message for a duplicate name+type instead of crashing', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryUpdate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`name`,`type`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['name', 'type'] },
+      })
+    )
+
+    const result = await renameCategoryAction({ ok: true }, renameFormData({ id: 'id1', name: 'Nursery' }))
+
+    expect(result).toEqual({ ok: false, message: 'A category with that name and type already exists.' })
+  })
+
+  it('returns a friendly inline message when the session is no longer an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+
+    const result = await renameCategoryAction({ ok: true }, renameFormData({ id: 'id1', name: 'Nursery' }))
+
+    expect(result).toEqual({ ok: false, message: 'You are not authorized to do that.' })
+    expect(categoryUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rethrows an unexpected error so the app error boundary still catches it', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryUpdate.mockRejectedValue(new Error('connection reset'))
+
+    await expect(
+      renameCategoryAction({ ok: true }, renameFormData({ id: 'id1', name: 'Nursery' }))
+    ).rejects.toThrow('connection reset')
+  })
+})
+
+describe('reactivateCategory', () => {
+  it('rejects a non-admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(reactivateCategory('id1')).rejects.toThrow(AuthzError)
+    expect(categoryUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects when the category no longer exists', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindUnique.mockResolvedValue(null)
+    await expect(reactivateCategory('id1')).rejects.toThrow('No such category')
+    expect(categoryUpdate).not.toHaveBeenCalled()
+  })
+
+  it('reassigns sortOrder to one past the current max active same-type sortOrder', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindUnique.mockResolvedValue({ id: 'id1', type: 'CLASSROOM' })
+    categoryAggregate.mockResolvedValue({ _max: { sortOrder: 4 } })
+
+    await reactivateCategory('id1')
+
+    expect(categoryAggregate).toHaveBeenCalledWith({
+      where: { type: 'CLASSROOM', isActive: true },
+      _max: { sortOrder: true },
+    })
+    expect(categoryUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { isActive: true, sortOrder: 5 },
+    })
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/[eventId]', 'page')
+  })
+
+  it('starts at sortOrder 0 when no active category of that type exists yet', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindUnique.mockResolvedValue({ id: 'id1', type: 'CLASSROOM' })
+    categoryAggregate.mockResolvedValue({ _max: { sortOrder: null } })
+
+    await reactivateCategory('id1')
+
+    expect(categoryUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { isActive: true, sortOrder: 0 },
+    })
   })
 })
 

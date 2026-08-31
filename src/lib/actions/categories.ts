@@ -6,7 +6,7 @@ import { ZodError } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, requireUser } from '@/lib/authz'
 import { AuthzError } from '@/lib/authz'
-import { createCategorySchema, moveCategorySchema, idSchema } from '@/lib/validation'
+import { createCategorySchema, moveCategorySchema, renameCategorySchema, idSchema } from '@/lib/validation'
 import { friendlyValidationMessage } from '@/lib/validation'
 
 export async function listActiveCategories() {
@@ -124,4 +124,71 @@ export async function moveCategory(input: unknown) {
     revalidatePath('/settings')
     revalidatePath('/entry/[eventId]', 'page')
   }
+}
+
+/**
+ * Renaming is safe in a way type/countsTowardTotal changes aren't: records
+ * reference the category by id, so history follows the new name — no
+ * warning dialog needed, unlike updateCategory().
+ */
+export async function renameCategory(input: unknown) {
+  await requireAdmin()
+  const { id, name } = renameCategorySchema.parse(input)
+
+  await prisma.category.update({ where: { id }, data: { name } })
+  revalidatePath('/settings')
+  revalidatePath('/entry/[eventId]', 'page')
+}
+
+/**
+ * useActionState-compatible wrapper around renameCategory() for the
+ * category manager's inline rename form — same inline-error pattern as
+ * createCategoryAction, including the P2002 (duplicate name+type) branch.
+ */
+export async function renameCategoryAction(
+  _prevState: CategoryFormState,
+  formData: FormData
+): Promise<CategoryFormState> {
+  try {
+    await renameCategory({
+      id: formData.get('id'),
+      name: formData.get('name'),
+    })
+  } catch (error) {
+    if (error instanceof AuthzError) {
+      return { ok: false, message: 'You are not authorized to do that.' }
+    }
+    if (error instanceof ZodError) {
+      return { ok: false, message: friendlyValidationMessage(error) }
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return { ok: false, message: 'A category with that name and type already exists.' }
+    }
+    throw error
+  }
+  return { ok: true }
+}
+
+/**
+ * Un-hides a category and sends it to the end of its type's active list —
+ * same rule as createCategory's sortOrder, so a restored category doesn't
+ * collide with (or jump ahead of) whatever categories were added while it
+ * was hidden.
+ */
+export async function reactivateCategory(input: unknown) {
+  await requireAdmin()
+  const id = idSchema.parse(input)
+
+  const category = await prisma.category.findUnique({ where: { id } })
+  if (!category) throw new Error('No such category')
+
+  const { _max } = await prisma.category.aggregate({
+    where: { type: category.type, isActive: true },
+    _max: { sortOrder: true },
+  })
+  const sortOrder = (_max.sortOrder ?? -1) + 1
+
+  await prisma.category.update({ where: { id }, data: { isActive: true, sortOrder } })
+  revalidatePath('/settings')
+  revalidatePath('/entry/[eventId]', 'page')
 }
