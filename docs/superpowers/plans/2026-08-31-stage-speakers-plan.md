@@ -1439,7 +1439,7 @@ git commit -m "feat: make the Stage region tappable with a SpeakerDialog"
 
 Pure UI — no new tests, same rationale as Task 4.
 
-- [ ] **Step 1: Fetch speakers and render the line**
+- [x] **Step 1: Fetch speakers and render the line**
 
 In `src/app/report/[eventId]/page.tsx`, add the import:
 
@@ -1486,7 +1486,7 @@ to:
 
 No `className="no-print"` — unlike the admin-only action buttons, this line is part of the printed summary (explicit in the spec).
 
-- [ ] **Step 2: Run a type-check**
+- [x] **Step 2: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -1494,7 +1494,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 3: Run the full test suite**
+- [x] **Step 3: Run the full test suite**
 
 ```bash
 npm test
@@ -1502,7 +1502,7 @@ npm test
 
 Expected: all passing.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add "src/app/report/[eventId]/page.tsx"

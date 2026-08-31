@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getEventSummary } from '@/lib/actions/attendance'
+import { listSpeakers } from '@/lib/actions/speakers'
 import { PrintButton } from '@/components/PrintButton'
 import { formatServiceDate } from '@/lib/dates'
 import { TYPE_LABELS } from '@/lib/category-labels'
@@ -7,7 +8,11 @@ import { requireUserPage } from '@/lib/authz'
 
 export default async function ReportPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params
-  const [user, { event, rows, totals }] = await Promise.all([requireUserPage(), getEventSummary(eventId)])
+  const [user, { event, rows, totals }, speakers] = await Promise.all([
+    requireUserPage(),
+    getEventSummary(eventId),
+    listSpeakers(eventId),
+  ])
 
   return (
     <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
@@ -15,6 +20,9 @@ export default async function ReportPage({ params }: { params: Promise<{ eventId
         <div>
           <h1 style={{ fontSize: 'var(--text-xl)', marginBottom: 0 }}>{event.name}</h1>
           <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>{formatServiceDate(event.serviceDate)}</p>
+          <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>
+            Speakers: {speakers.length > 0 ? speakers.map((speaker) => speaker.name).join(', ') : '—'}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
           {user.role === 'ADMIN' && (
