@@ -365,7 +365,7 @@ git commit -m "feat: redirect to /denied on page-level AuthzError instead of cra
 
 This task is pure UI wiring with no business logic to unit test — matching this project's convention of not adding automated tests for pure UI composition (see `docs/superpowers/plans/2026-08-17-csv-export-plan.md` Task 5 and this plan's own Task 1, Step 5). Verification here is a type-check, the full suite staying green, and the manual checklist in Task 6.
 
-- [ ] **Step 1: Create the error boundary**
+- [x] **Step 1: Create the error boundary**
 
 Create `src/app/error.tsx`:
 
@@ -423,7 +423,7 @@ export default function ErrorPage({
 }
 ```
 
-- [ ] **Step 2: Run a type-check**
+- [x] **Step 2: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -431,7 +431,7 @@ npx tsc --noEmit
 
 Expected: clean. This confirms the `retry` prop's type matches what Next.js 16.3.0 actually passes (per `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/error.md`, `retry` became the stable prop name in `v16.3.0`).
 
-- [ ] **Step 3: Run the full test suite**
+- [x] **Step 3: Run the full test suite**
 
 ```bash
 npm test
@@ -439,7 +439,7 @@ npm test
 
 Expected: all passing — this task adds no logic, only a new file.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/error.tsx
