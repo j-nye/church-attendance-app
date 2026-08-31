@@ -10,6 +10,8 @@ const categoryCreate = vi.fn()
 const categoryUpdate = vi.fn()
 const categoryAggregate = vi.fn()
 const categoryFindUnique = vi.fn()
+const categoryDelete = vi.fn()
+const attendanceRecordCount = vi.fn()
 const txCategoryFindUnique = vi.fn()
 const txCategoryFindFirst = vi.fn()
 const txCategoryUpdate = vi.fn()
@@ -46,6 +48,10 @@ vi.mock('@/lib/prisma', () => ({
       update: (...args: unknown[]) => categoryUpdate(...args),
       aggregate: (...args: unknown[]) => categoryAggregate(...args),
       findUnique: (...args: unknown[]) => categoryFindUnique(...args),
+      delete: (...args: unknown[]) => categoryDelete(...args),
+    },
+    attendanceRecord: {
+      count: (...args: unknown[]) => attendanceRecordCount(...args),
     },
     $transaction: (...args: [callback: (tx: unknown) => Promise<unknown>]) => transaction(...args),
   },
@@ -64,6 +70,8 @@ const {
   renameCategory,
   renameCategoryAction,
   reactivateCategory,
+  updateCategory,
+  deleteCategory,
 } = await import('@/lib/actions/categories')
 
 beforeEach(() => {
@@ -75,6 +83,8 @@ beforeEach(() => {
   categoryUpdate.mockReset()
   categoryAggregate.mockReset()
   categoryFindUnique.mockReset()
+  categoryDelete.mockReset()
+  attendanceRecordCount.mockReset()
   transaction.mockClear()
   txCategoryFindUnique.mockReset()
   txCategoryFindFirst.mockReset()
@@ -411,6 +421,104 @@ describe('reactivateCategory', () => {
       where: { id: 'id1' },
       data: { isActive: true, sortOrder: 0 },
     })
+  })
+})
+
+describe('updateCategory', () => {
+  it('rejects a non-admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(
+      updateCategory({ id: 'id1', type: 'SECTION', countsTowardTotal: true, svgKey: 'left-wing' })
+    ).rejects.toThrow(AuthzError)
+    expect(categoryUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects an invalid type', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    await expect(
+      updateCategory({ id: 'id1', type: 'BOGUS', countsTowardTotal: true, svgKey: null })
+    ).rejects.toThrow()
+    expect(categoryUpdate).not.toHaveBeenCalled()
+  })
+
+  it('keeps svgKey when the type stays SECTION', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryUpdate.mockResolvedValue({ id: 'id1' })
+
+    await updateCategory({ id: 'id1', type: 'SECTION', countsTowardTotal: true, svgKey: 'left-wing' })
+
+    expect(categoryUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { type: 'SECTION', countsTowardTotal: true, svgKey: 'left-wing' },
+    })
+  })
+
+  it('clears svgKey server-side when the type changes away from SECTION, even if the caller still sent one', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryUpdate.mockResolvedValue({ id: 'id1' })
+
+    await updateCategory({ id: 'id1', type: 'CLASSROOM', countsTowardTotal: true, svgKey: 'left-wing' })
+
+    expect(categoryUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { type: 'CLASSROOM', countsTowardTotal: true, svgKey: null },
+    })
+  })
+
+  it('updates countsTowardTotal and revalidates settings and every entry page', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryUpdate.mockResolvedValue({ id: 'id1' })
+
+    await updateCategory({ id: 'id1', type: 'SERVICE_METRIC', countsTowardTotal: false, svgKey: null })
+
+    expect(categoryUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { type: 'SERVICE_METRIC', countsTowardTotal: false, svgKey: null },
+    })
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/[eventId]', 'page')
+  })
+})
+
+describe('deleteCategory', () => {
+  it('rejects a non-admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(deleteCategory('id1')).rejects.toThrow(AuthzError)
+    expect(categoryDelete).not.toHaveBeenCalled()
+  })
+
+  it('refuses when the category still has attendance records', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    attendanceRecordCount.mockResolvedValue(3)
+
+    await expect(deleteCategory('id1')).rejects.toThrow(
+      'This category has recorded attendance and cannot be deleted — hide it instead.'
+    )
+    expect(categoryDelete).not.toHaveBeenCalled()
+  })
+
+  it('refuses even when the caller believes the category is unused — a race where a record appeared between render and click', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    // Simulates a volunteer recording a count in the moment between the
+    // settings page rendering hasRecords: false and the admin clicking
+    // Delete — the server always re-checks, never trusts what the UI last saw.
+    attendanceRecordCount.mockResolvedValue(1)
+
+    await expect(deleteCategory('id1')).rejects.toThrow('cannot be deleted')
+    expect(categoryDelete).not.toHaveBeenCalled()
+  })
+
+  it('hard-deletes when no attendance records exist, and revalidates settings and every entry page', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    attendanceRecordCount.mockResolvedValue(0)
+    categoryDelete.mockResolvedValue({ id: 'id1' })
+
+    await deleteCategory('id1')
+
+    expect(attendanceRecordCount).toHaveBeenCalledWith({ where: { categoryId: 'id1' } })
+    expect(categoryDelete).toHaveBeenCalledWith({ where: { id: 'id1' } })
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/[eventId]', 'page')
   })
 })
 

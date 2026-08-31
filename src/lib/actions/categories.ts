@@ -6,7 +6,13 @@ import { ZodError } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, requireUser } from '@/lib/authz'
 import { AuthzError } from '@/lib/authz'
-import { createCategorySchema, moveCategorySchema, renameCategorySchema, idSchema } from '@/lib/validation'
+import {
+  createCategorySchema,
+  moveCategorySchema,
+  renameCategorySchema,
+  updateCategorySchema,
+  idSchema,
+} from '@/lib/validation'
 import { friendlyValidationMessage } from '@/lib/validation'
 
 export async function listActiveCategories() {
@@ -189,6 +195,50 @@ export async function reactivateCategory(input: unknown) {
   const sortOrder = (_max.sortOrder ?? -1) + 1
 
   await prisma.category.update({ where: { id }, data: { isActive: true, sortOrder } })
+  revalidatePath('/settings')
+  revalidatePath('/entry/[eventId]', 'page')
+}
+
+/**
+ * Edits type/countsTowardTotal/svgKey — behind the settings UI's required
+ * warning dialog, since totals are computed live from these fields and
+ * changing them rewrites how every past report groups and totals this
+ * category. Changing type away from SECTION always clears svgKey
+ * server-side: a non-Sanctuary category can never be placed on the map,
+ * regardless of what the client sent.
+ */
+export async function updateCategory(input: unknown) {
+  await requireAdmin()
+  const { id, type, countsTowardTotal, svgKey } = updateCategorySchema.parse(input)
+
+  const resolvedSvgKey = type === 'SECTION' ? svgKey : null
+
+  await prisma.category.update({
+    where: { id },
+    data: { type, countsTowardTotal, svgKey: resolvedSvgKey },
+  })
+  revalidatePath('/settings')
+  revalidatePath('/entry/[eventId]', 'page')
+}
+
+/**
+ * Hard-deletes a category — offered only when it has zero attendance
+ * records. Re-checks that server-side (never trusts the UI's hasRecords
+ * flag, which only controls whether the Delete button renders) so a record
+ * created between the page rendering and the admin clicking Delete still
+ * blocks the delete. The DB's onDelete: Restrict on AttendanceRecord's
+ * category relation is the backstop if this check is ever bypassed.
+ */
+export async function deleteCategory(input: unknown) {
+  await requireAdmin()
+  const id = idSchema.parse(input)
+
+  const recordCount = await prisma.attendanceRecord.count({ where: { categoryId: id } })
+  if (recordCount > 0) {
+    throw new Error('This category has recorded attendance and cannot be deleted — hide it instead.')
+  }
+
+  await prisma.category.delete({ where: { id } })
   revalidatePath('/settings')
   revalidatePath('/entry/[eventId]', 'page')
 }

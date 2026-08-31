@@ -1293,7 +1293,7 @@ git commit -m "feat: re-add renameCategory and reactivateCategory"
 - Consumes: `requireAdmin()`, `updateCategorySchema` (Task 1, redefined), `idSchema`, `prisma.category.update`, `prisma.category.delete` (new use), `prisma.attendanceRecord.count` (new use — first time this file touches the `attendanceRecord` table).
 - Produces: `updateCategory(input: unknown): Promise<void>`, `deleteCategory(input: unknown): Promise<void>` (both exported from `src/lib/actions/categories.ts`). Consumed by Task 7's `EditCategoryDialog` and `CategoryRow`'s delete confirmation.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `tests/actions-categories.test.ts`. Add mocks (after `const categoryFindUnique = vi.fn()` from Task 4):
 
@@ -1444,7 +1444,7 @@ describe('deleteCategory', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- actions-categories
@@ -1452,7 +1452,7 @@ npm test -- actions-categories
 
 Expected: FAIL — `updateCategory` and `deleteCategory` aren't exported yet.
 
-- [ ] **Step 3: Implement `updateCategory` and `deleteCategory`**
+- [x] **Step 3: Implement `updateCategory` and `deleteCategory`**
 
 Update the import line at the top of `src/lib/actions/categories.ts` from:
 
@@ -1520,7 +1520,7 @@ export async function deleteCategory(input: unknown) {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- actions-categories
@@ -1528,7 +1528,7 @@ npm test -- actions-categories
 
 Expected: PASS, all tests including every one added in this task.
 
-- [ ] **Step 5: Run a type-check**
+- [x] **Step 5: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -1536,7 +1536,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/actions/categories.ts tests/actions-categories.test.ts
