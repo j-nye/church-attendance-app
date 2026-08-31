@@ -1,8 +1,9 @@
 import { requireAdminPage } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
 import { deactivateCategory } from '@/lib/actions/categories'
-import { addAllowlistEntry, deactivateAllowlistEntry, listAllowlist } from '@/lib/actions/allowlist'
+import { deactivateAllowlistEntry, listAllowlist } from '@/lib/actions/allowlist'
 import { AddCategoryForm } from '@/components/AddCategoryForm'
+import { AddAllowlistForm } from '@/components/AddAllowlistForm'
 
 export default async function SettingsPage() {
   // Page-level gate. The actions below each re-check independently — this
@@ -49,20 +50,7 @@ export default async function SettingsPage() {
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Who can sign in</h2>
-        <form
-          action={async (formData: FormData) => {
-            'use server'
-            await addAllowlistEntry({ email: formData.get('email'), role: formData.get('role') })
-          }}
-          style={{ display: 'grid', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}
-        >
-          <input name="email" type="email" placeholder="person@example.com" required style={{ padding: 'var(--space-3)' }} />
-          <select name="role" required style={{ padding: 'var(--space-3)' }}>
-            <option value="VOLUNTEER">Volunteer</option>
-            <option value="ADMIN">Admin</option>
-          </select>
-          <button type="submit">Authorize</button>
-        </form>
+        <AddAllowlistForm />
 
         {allowlist.map((entry) => (
           <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-2) 0' }}>

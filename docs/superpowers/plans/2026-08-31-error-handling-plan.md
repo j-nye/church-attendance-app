@@ -927,7 +927,7 @@ git commit -m "feat: render add-category form errors inline instead of crashing"
 - Consumes: `addAllowlistEntry` (existing, unchanged), `AuthzError` (`src/lib/authz.ts`), `friendlyValidationMessage` (Task 3).
 - Produces: `AllowlistFormState` type and `addAllowlistEntryAction(prevState, formData): Promise<AllowlistFormState>` (exported from `src/lib/actions/allowlist.ts`) and the `AddAllowlistForm` component (exported from `src/components/AddAllowlistForm.tsx`) — rendered by `/settings`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `tests/actions-allowlist.test.ts`. Update the import line:
 
@@ -1017,7 +1017,7 @@ describe('addAllowlistEntryAction', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- actions-allowlist
@@ -1025,7 +1025,7 @@ npm test -- actions-allowlist
 
 Expected: FAIL — `addAllowlistEntryAction` is not exported from `@/lib/actions/allowlist`.
 
-- [ ] **Step 3: Implement `addAllowlistEntryAction`**
+- [x] **Step 3: Implement `addAllowlistEntryAction`**
 
 In `src/lib/actions/allowlist.ts`, add these imports at the top of the file, alongside the existing ones:
 
@@ -1072,7 +1072,7 @@ export async function addAllowlistEntryAction(
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- actions-allowlist
@@ -1080,7 +1080,7 @@ npm test -- actions-allowlist
 
 Expected: PASS, all tests in the file including the 5 new ones.
 
-- [ ] **Step 5: Create `AddAllowlistForm`**
+- [x] **Step 5: Create `AddAllowlistForm`**
 
 Create `src/components/AddAllowlistForm.tsx`:
 
@@ -1126,7 +1126,7 @@ export function AddAllowlistForm() {
 }
 ```
 
-- [ ] **Step 6: Wire `AddAllowlistForm` into the settings page**
+- [x] **Step 6: Wire `AddAllowlistForm` into the settings page**
 
 In `src/app/settings/page.tsx`, add the import:
 
@@ -1165,7 +1165,7 @@ Update the existing `import { addAllowlistEntry, deactivateAllowlistEntry, listA
 import { deactivateAllowlistEntry, listAllowlist } from '@/lib/actions/allowlist'
 ```
 
-- [ ] **Step 7: Run a type-check**
+- [x] **Step 7: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -1173,7 +1173,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 8: Run the full test suite**
+- [x] **Step 8: Run the full test suite**
 
 ```bash
 npm test
@@ -1181,7 +1181,7 @@ npm test
 
 Expected: all passing, including the 5 new tests from Step 1.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/lib/actions/allowlist.ts src/components/AddAllowlistForm.tsx src/app/settings/page.tsx tests/actions-allowlist.test.ts

@@ -1,9 +1,10 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { ZodError } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { requireAdmin } from '@/lib/authz'
-import { allowlistEntrySchema, idSchema } from '@/lib/validation'
+import { requireAdmin, AuthzError } from '@/lib/authz'
+import { allowlistEntrySchema, idSchema, friendlyValidationMessage } from '@/lib/validation'
 
 export async function listAllowlist() {
   await requireAdmin()
@@ -45,4 +46,35 @@ export async function deactivateAllowlistEntry(input: unknown) {
 
   await prisma.allowlist.update({ where: { id }, data: { isActive: false } })
   revalidatePath('/settings')
+}
+
+export type AllowlistFormState = { ok: boolean; message?: string }
+
+/**
+ * useActionState-compatible wrapper around addAllowlistEntry() for the
+ * settings page's "Who can sign in" form. Catches invalid input and a
+ * stale/revoked admin session as an inline { ok: false, message } result.
+ *
+ * addAllowlistEntry() upserts on the unique email column, so re-adding an
+ * existing address is a normal update (e.g. changing that person's role),
+ * not a Prisma unique-constraint error — there is deliberately no P2002
+ * branch here. addAllowlistEntry() itself keeps its existing throwing
+ * contract unchanged — other callers and its own tests above depend on it.
+ */
+export async function addAllowlistEntryAction(
+  _prevState: AllowlistFormState,
+  formData: FormData
+): Promise<AllowlistFormState> {
+  try {
+    await addAllowlistEntry({ email: formData.get('email'), role: formData.get('role') })
+  } catch (error) {
+    if (error instanceof AuthzError) {
+      return { ok: false, message: 'You are not authorized to do that.' }
+    }
+    if (error instanceof ZodError) {
+      return { ok: false, message: friendlyValidationMessage(error) }
+    }
+    throw error
+  }
+  return { ok: true }
 }
