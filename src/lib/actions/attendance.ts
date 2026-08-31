@@ -102,7 +102,7 @@ export type ExportRow = {
   categoryType: string
   group: string
   categoryName: string
-  count: number
+  count: number | ''
   countsTowardTotal: boolean
   recordedBy: string
 }
@@ -112,24 +112,42 @@ export type ExportRow = {
  * events. Always includes recordedBy unconditionally — unlike
  * getEventSummary's per-row masking, this whole endpoint is admin-only end
  * to end, so there's no volunteer-facing view of this data to protect.
+ *
+ * Each event's rows are its attendance records, immediately followed by that
+ * same event's speakers — additive rows identifiable by
+ * `categoryType: 'SPEAKER'`, with an empty-string Count since a speaker
+ * isn't a headcount.
  */
 export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
   await requireAdmin()
   if (eventIds.length === 0) return []
 
-  const events = await prisma.event.findMany({
-    where: { id: { in: eventIds } },
-    include: {
-      records: {
-        include: { category: true },
-        orderBy: [{ category: { sortOrder: 'asc' } }, { category: { name: 'asc' } }],
+  const [events, speakers] = await Promise.all([
+    prisma.event.findMany({
+      where: { id: { in: eventIds } },
+      include: {
+        records: {
+          include: { category: true },
+          orderBy: [{ category: { sortOrder: 'asc' } }, { category: { name: 'asc' } }],
+        },
       },
-    },
-    orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
-  })
+      orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.serviceSpeaker.findMany({
+      where: { eventId: { in: eventIds } },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ])
 
-  return events.flatMap((event) =>
-    event.records.map((record) => ({
+  const speakersByEvent = new Map<string, typeof speakers>()
+  for (const speaker of speakers) {
+    const list = speakersByEvent.get(speaker.eventId) ?? []
+    list.push(speaker)
+    speakersByEvent.set(speaker.eventId, list)
+  }
+
+  return events.flatMap((event) => {
+    const attendanceRows: ExportRow[] = event.records.map((record) => ({
       serviceDate: event.serviceDate,
       serviceName: event.name,
       archived: event.isArchived,
@@ -140,7 +158,21 @@ export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
       countsTowardTotal: record.category.countsTowardTotal,
       recordedBy: record.recordedBy,
     }))
-  )
+
+    const speakerRows: ExportRow[] = (speakersByEvent.get(event.id) ?? []).map((speaker) => ({
+      serviceDate: event.serviceDate,
+      serviceName: event.name,
+      archived: event.isArchived,
+      categoryType: 'SPEAKER',
+      group: 'Stage',
+      categoryName: speaker.name,
+      count: '',
+      countsTowardTotal: false,
+      recordedBy: speaker.recordedBy,
+    }))
+
+    return [...attendanceRows, ...speakerRows]
+  })
 }
 
 export type ManageRow = {

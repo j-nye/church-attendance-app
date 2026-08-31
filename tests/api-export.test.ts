@@ -160,4 +160,29 @@ describe('GET /api/export', () => {
     )
     expect(getExportRows).toHaveBeenCalledWith(['e1', 'e2'])
   })
+
+  it('renders a SPEAKER row from getExportRows with an empty Count field in the CSV', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindUnique.mockResolvedValue({ id: 'e1', serviceDate: '2026-08-16' })
+    getExportRows.mockResolvedValue([
+      {
+        serviceDate: '2026-08-16',
+        serviceName: 'Service - Sunday, August 16, 2026',
+        archived: false,
+        categoryType: 'SPEAKER',
+        group: 'Stage',
+        categoryName: 'Pastor Jones',
+        count: '',
+        countsTowardTotal: false,
+        recordedBy: 'vol@example.com',
+      },
+    ])
+
+    const response = await GET(request('?eventId=e1'))
+
+    const body = await response.text()
+    expect(body).toContain(
+      '2026-08-16,"Service - Sunday, August 16, 2026",false,SPEAKER,Stage,Pastor Jones,,false,vol@example.com'
+    )
+  })
 })

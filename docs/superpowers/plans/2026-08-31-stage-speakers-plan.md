@@ -671,7 +671,7 @@ git commit -m "feat: add listSpeakers/addSpeaker/removeSpeaker server actions"
 
 **Export composition decision:** speaker rows are appended **inside `getExportRows`**, not composed in the API route. `getExportRows` already owns the "flatten (event, category) rows for CSV" responsibility and already loops over `events` per-event to build attendance rows — appending that same event's speaker rows right there keeps ordering (attendance rows, then that event's speakers) trivially correct with no extra bookkeeping in the route. The route (`src/app/api/export/route.ts`) needs **no changes** — it already treats `getExportRows`'s return value as an opaque list of 9-column rows and doesn't need to know speakers exist. This keeps `tests/api-export.test.ts`'s existing route-level tests valid untouched; the one addition there (Step 8 below) is optional-but-cheap coverage of the CSV layer rendering an empty `Count` field correctly, not a required change to make existing tests pass.
 
-- [ ] **Step 1: Write the failing test for the widened `ExportRow` shape and speaker-row composition**
+- [x] **Step 1: Write the failing test for the widened `ExportRow` shape and speaker-row composition**
 
 Extend `tests/actions-attendance.test.ts`. Add a `serviceSpeaker.findMany` mock alongside the other mock `const`s (after `const attendanceFindMany = vi.fn()`):
 
@@ -812,7 +812,7 @@ Then add a new test:
   })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 npm test -- actions-attendance
@@ -820,7 +820,7 @@ npm test -- actions-attendance
 
 Expected: FAIL — the new tests expect speaker rows that `getExportRows` doesn't produce yet, and the widened `ExportRow.count` type doesn't type-check against a plain `number` field (this surfaces at the `tsc` step, not necessarily at runtime, since the test file compares plain objects).
 
-- [ ] **Step 3: Widen `ExportRow` and extend `getExportRows`**
+- [x] **Step 3: Widen `ExportRow` and extend `getExportRows`**
 
 In `src/lib/actions/attendance.ts`, change the `ExportRow` type's `count` field:
 
@@ -910,7 +910,7 @@ export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 npm test -- actions-attendance
@@ -918,7 +918,7 @@ npm test -- actions-attendance
 
 Expected: PASS, all tests in the file including the new ones.
 
-- [ ] **Step 5: Run a type-check**
+- [x] **Step 5: Run a type-check**
 
 ```bash
 npx tsc --noEmit
@@ -926,7 +926,7 @@ npx tsc --noEmit
 
 Expected: clean — confirms `prisma.serviceSpeaker.findMany` types correctly and every existing `ExportRow` literal (`count: 10`, `count: 2`, etc.) is still assignable to the widened `number | ''`.
 
-- [ ] **Step 6: Run the full suite to confirm nothing else broke**
+- [x] **Step 6: Run the full suite to confirm nothing else broke**
 
 ```bash
 npm test
@@ -934,7 +934,7 @@ npm test
 
 Expected: all passing, including `tests/api-export.test.ts` unmodified (it mocks `getExportRows` directly and never asserts on its internals).
 
-- [ ] **Step 7 (optional but recommended): Add one CSV-layer test confirming the empty `Count` field**
+- [x] **Step 7 (optional but recommended): Add one CSV-layer test confirming the empty `Count` field**
 
 Extend `tests/api-export.test.ts` with a test that feeds a speaker-shaped row through the (unchanged) route, to pin the "empty string end to end" contract at the HTTP boundary too — this doesn't test anything route code doesn't already do, it just documents the expectation:
 
@@ -967,7 +967,7 @@ Extend `tests/api-export.test.ts` with a test that feeds a speaker-shaped row th
 
 Run `npm test -- api-export` to confirm it passes (no implementation change needed — this is purely additive coverage).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/lib/actions/attendance.ts tests/actions-attendance.test.ts tests/api-export.test.ts

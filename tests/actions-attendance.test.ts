@@ -10,6 +10,7 @@ const categoryFindUnique = vi.fn()
 const categoryFindMany = vi.fn()
 const attendanceUpsert = vi.fn()
 const attendanceFindMany = vi.fn()
+const speakerFindMany = vi.fn()
 
 const txAttendanceFindUnique = vi.fn()
 const txAttendanceDeleteMany = vi.fn()
@@ -55,6 +56,9 @@ vi.mock('@/lib/prisma', () => ({
       upsert: (...args: unknown[]) => attendanceUpsert(...args),
       findMany: (...args: unknown[]) => attendanceFindMany(...args),
     },
+    serviceSpeaker: {
+      findMany: (...args: unknown[]) => speakerFindMany(...args),
+    },
     $transaction: (...args: [callback: (tx: unknown) => Promise<unknown>]) => transaction(...args),
   },
 }))
@@ -80,6 +84,8 @@ beforeEach(() => {
   categoryFindMany.mockReset()
   attendanceUpsert.mockReset()
   attendanceFindMany.mockReset()
+  speakerFindMany.mockReset()
+  speakerFindMany.mockResolvedValue([])
   transaction.mockClear()
   txAttendanceFindUnique.mockReset()
   txAttendanceDeleteMany.mockReset()
@@ -317,6 +323,7 @@ describe('getExportRows', () => {
     const result = await getExportRows([])
     expect(result).toEqual([])
     expect(eventFindMany).not.toHaveBeenCalled()
+    expect(speakerFindMany).not.toHaveBeenCalled()
   })
 
   it('flattens multiple events into one row array with the full 9-field shape', async () => {
@@ -386,6 +393,108 @@ describe('getExportRows', () => {
       },
       orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
     })
+  })
+
+  it("appends each event's speakers immediately after its attendance rows, with Category Type SPEAKER, Group Stage, and an empty Count", async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindMany.mockResolvedValue([
+      {
+        id: 'e1',
+        name: 'Sunday Service',
+        serviceDate: '2026-08-09',
+        isArchived: false,
+        records: [
+          {
+            count: 10,
+            recordedBy: 'vol@example.com',
+            category: { type: 'SECTION', name: 'Left Wing', countsTowardTotal: true },
+          },
+        ],
+      },
+    ])
+    speakerFindMany.mockResolvedValue([
+      {
+        id: 's1',
+        eventId: 'e1',
+        name: 'Pastor Jones',
+        recordedBy: 'vol@example.com',
+        createdAt: new Date('2026-08-09T09:00:00Z'),
+      },
+      {
+        id: 's2',
+        eventId: 'e1',
+        name: 'Guest Speaker',
+        recordedBy: 'vol2@example.com',
+        createdAt: new Date('2026-08-09T09:05:00Z'),
+      },
+    ])
+
+    const result = await getExportRows(['e1'])
+
+    expect(result).toEqual([
+      {
+        serviceDate: '2026-08-09',
+        serviceName: 'Sunday Service',
+        archived: false,
+        categoryType: 'SECTION',
+        group: 'Sanctuary',
+        categoryName: 'Left Wing',
+        count: 10,
+        countsTowardTotal: true,
+        recordedBy: 'vol@example.com',
+      },
+      {
+        serviceDate: '2026-08-09',
+        serviceName: 'Sunday Service',
+        archived: false,
+        categoryType: 'SPEAKER',
+        group: 'Stage',
+        categoryName: 'Pastor Jones',
+        count: '',
+        countsTowardTotal: false,
+        recordedBy: 'vol@example.com',
+      },
+      {
+        serviceDate: '2026-08-09',
+        serviceName: 'Sunday Service',
+        archived: false,
+        categoryType: 'SPEAKER',
+        group: 'Stage',
+        categoryName: 'Guest Speaker',
+        count: '',
+        countsTowardTotal: false,
+        recordedBy: 'vol2@example.com',
+      },
+    ])
+    expect(speakerFindMany).toHaveBeenCalledWith({
+      where: { eventId: { in: ['e1'] } },
+      orderBy: { createdAt: 'asc' },
+    })
+  })
+
+  it('appends nothing for an event that has no speakers', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindMany.mockResolvedValue([
+      {
+        id: 'e1',
+        name: 'Sunday Service',
+        serviceDate: '2026-08-09',
+        isArchived: false,
+        records: [
+          {
+            count: 10,
+            recordedBy: 'vol@example.com',
+            category: { type: 'SECTION', name: 'Left Wing', countsTowardTotal: true },
+          },
+        ],
+      },
+    ])
+    // speakerFindMany already defaults to [] via beforeEach.
+
+    const result = await getExportRows(['e1'])
+
+    expect(result).toHaveLength(1)
+    expect(result.every((row) => row.categoryType !== 'SPEAKER')).toBe(true)
   })
 })
 
