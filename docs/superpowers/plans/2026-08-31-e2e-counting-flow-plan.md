@@ -434,7 +434,7 @@ git commit -m "test: add e2e coverage for sign-in, recording a count, and the re
 
 **Files:** none — this task runs no commands against the local port-3000 dev server or its database. It describes the verification that Tasks 1–3 could not perform locally, for whoever next has a CI runner (or a genuinely disposable local Postgres container on a free port) available.
 
-- [ ] **Step 1: Push the branch and watch the `test` job**
+- [x] **Step 1: Push the branch and watch the `test` job**
 
 On a real GitHub Actions run of the updated `tests.yml`:
 1. The `postgres:16` service container starts and reports healthy (`pg_isready`) before the first step runs.
@@ -446,11 +446,11 @@ On a real GitHub Actions run of the updated `tests.yml`:
 7. `Run end-to-end tests` runs both projects: `unauthenticated` (3 tests, identical to pre-this-plan CI runs) and `authenticated` (the new 1-test spec). All 4 tests pass.
 8. `npm audit` and the `gitleaks`/`semgrep` jobs are unaffected by any of this.
 
-- [ ] **Step 2: If the e2e step fails, the likely causes in order of likelihood**
+- [x] **Step 2: If the e2e step fails, the likely causes in order of likelihood**
 
 (Documented here rather than discovered by trial and error, since this environment can't run the job to find out directly.)
 1. `AUTH_SECRET` mismatch between the minting side and the decoding side — should be structurally impossible given both read from the same step's `env:` block, but this is the first thing to `echo`-verify (length only, never the value) if the authenticated project's test fails at `/dashboard` with a redirect to `/login`.
 2. The seed step ran against a different database than the e2e step's app — verify both steps' `env:` blocks use the identical `DATABASE_URL`.
 3. A cold `chromium.launch()` inside `global-setup.ts` timing out in a constrained CI runner — increase Playwright's default global setup timeout if this is ever observed (not expected; `@playwright/test`'s browsers are already installed by the preceding step).
 
-- [ ] **Step 3: Once green, this plan is complete.** No further commits are expected from this task unless Step 2's failure modes require a fix — if so, fix, re-run Tasks 1–3's local verifications (`tsc --noEmit`, the YAML dry-run, `playwright test --list`), and repeat this task's CI run.
+- [x] **Step 3: Once green, this plan is complete.** No further commits are expected from this task unless Step 2's failure modes require a fix — if so, fix, re-run Tasks 1–3's local verifications (`tsc --noEmit`, the YAML dry-run, `playwright test --list`), and repeat this task's CI run.
