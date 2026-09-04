@@ -41,7 +41,7 @@
 
 No red/green test cycle — this is YAML. Verified by: (a) a YAML-syntax dry-run (`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/tests.yml'))"` — confirmed `pyyaml` is available in this environment), (b) reading the diff back to confirm the `services:` block and step placement match GitHub Actions' documented `postgres:16` service-container pattern, and (c) true end-to-end proof is deferred to what Task 4 describes a green CI run looks like — this environment cannot execute a GitHub Actions runner.
 
-- [ ] **Step 1: Add the `postgres:16` service container to the `test` job**
+- [x] **Step 1: Add the `postgres:16` service container to the `test` job**
 
 In `.github/workflows/tests.yml`, add a `services:` block to the `test` job (as a sibling of `runs-on:`, before `steps:`):
 
@@ -67,7 +67,7 @@ In `.github/workflows/tests.yml`, add a `services:` block to the `test` job (as 
 
 GitHub Actions runs service containers on the same Docker network as the job's steps and publishes the mapped port back to the runner's own `localhost` — so `localhost:5432` is reachable from every step in this job without any extra networking config. The health check means GitHub Actions won't hand control to the first step until `pg_isready` succeeds inside the container, so the migrate step below never races an unready Postgres.
 
-- [ ] **Step 2: Add the migrate + seed steps, after `npm ci` and before the e2e step**
+- [x] **Step 2: Add the migrate + seed steps, after `npm ci` and before the e2e step**
 
 Insert two new steps between the existing `- run: npm run build` step and the existing `Install Playwright browsers` step:
 
@@ -87,7 +87,7 @@ Insert two new steps between the existing `- run: npm run build` step and the ex
 
 `DATABASE_URL` and `DIRECT_URL` are identical here (unlike the real Neon setup, which splits pooled vs. direct connections) because a plain `postgres:16` container has no connection pooler in front of it — both env vars can point at the same `localhost:5432`.
 
-- [ ] **Step 3: Point the e2e step's env at the real database**
+- [x] **Step 3: Point the e2e step's env at the real database**
 
 Change the existing `Run end-to-end tests` step's `env:` block from the current fake placeholder to the real container address, and add `SEED_ADMIN_EMAIL` (used by the new global-setup script — see Task 2 — to know which allowlisted identity to mint a token for):
 
@@ -105,7 +105,7 @@ Change the existing `Run end-to-end tests` step's `env:` block from the current 
 
 **Do not** touch the `npm test` step (leave it exactly as-is, no `env:` block at all) or the earlier `npm run build` step (its placeholder `DATABASE_URL` is untouched — Next's build never queries the database, so this was already safe and stays that way).
 
-- [ ] **Step 4: Judgment call — confirm `npm test` truly stays unaffected**
+- [x] **Step 4: Judgment call — confirm `npm test` truly stays unaffected**
 
 This is a judgment call the spec asked to be reported, not silently resolved: **is it safe that a real, reachable Postgres container is running for the *entire* job while `npm test` executes?**
 
@@ -113,7 +113,7 @@ Read `tests/db-probe.ts`, `tests/seed.test.ts`, `tests/auth.test.ts`, and `tests
 
 No code change in this step — it's a verification note. If a future editor ever moves `DATABASE_URL` to job-level `env:`, that would silently turn the three live-DB suites on inside `npm test`, running them against a database that (at that point in the job, before Step 2 has run) doesn't even have the schema migrated yet — they'd fail hard, not skip. Flagging this explicitly so nobody makes that "simplification" by accident.
 
-- [ ] **Step 5: Local developer story (documentation only, no new file)**
+- [x] **Step 5: Local developer story (documentation only, no new file)**
 
 Note here, for whoever next reads this plan, the one-liner a contributor runs locally to reproduce this same setup (per the spec's "no `docker-compose.yml`" non-goal):
 
@@ -139,7 +139,7 @@ SEED_ADMIN_EMAIL=e2e-admin@example.com \
 
 This is not something to run as part of *this* implementation task (it would build and start a server on port 3000, colliding with the dev server already running there for manual testing) — it's the reference a contributor uses later.
 
-- [ ] **Step 6: Dry-run the YAML**
+- [x] **Step 6: Dry-run the YAML**
 
 ```bash
 python3 -c "import yaml; yaml.safe_load(open('.github/workflows/tests.yml')); print('valid YAML')"
@@ -147,7 +147,7 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/tests.yml')); pr
 
 Expected: `valid YAML`. This only proves syntax, not GitHub Actions semantics — re-read the diff against this task's Steps 1–3 to confirm the `services:` block and step placement match.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add .github/workflows/tests.yml

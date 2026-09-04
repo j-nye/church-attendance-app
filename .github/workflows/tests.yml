@@ -12,6 +12,20 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: church_attendance_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,14 +42,26 @@ jobs:
           AUTH_SECRET: ci-build-placeholder-not-a-real-secret
           DATABASE_URL: postgresql://user:pass@localhost:5432/db
           DIRECT_URL: postgresql://user:pass@localhost:5432/db
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/church_attendance_test
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/church_attendance_test
+      - name: Seed the database
+        run: npm run db:seed
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/church_attendance_test
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/church_attendance_test
+          SEED_ADMIN_EMAIL: e2e-admin@example.com
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Run end-to-end tests
         run: npm run test:e2e
         env:
           AUTH_SECRET: ci-e2e-placeholder-not-a-real-secret
-          DATABASE_URL: postgresql://user:pass@localhost:5432/db
-          DIRECT_URL: postgresql://user:pass@localhost:5432/db
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/church_attendance_test
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/church_attendance_test
+          SEED_ADMIN_EMAIL: e2e-admin@example.com
       - name: Audit dependencies
         run: npm audit --audit-level=high
         continue-on-error: true
