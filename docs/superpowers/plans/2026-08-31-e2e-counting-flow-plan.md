@@ -354,7 +354,7 @@ git commit -m "test: mint an e2e session via next-auth/jwt instead of a real Goo
 
 No red/green cycle — this is the one new integration point this whole plan exists to add. Verified by: (a) `npx tsc --noEmit` (type-checks against real Playwright/DOM types), (b) reading the spec back against the four files above to confirm every locator matches real, current markup (done directly, not guessed), and (c) true pass/fail is deferred to Task 4 — running this spec means starting the built app on port 3000 via Playwright's `webServer`, which must not happen while the dev server already on that port is serving manual testing.
 
-- [ ] **Step 1: Write the spec**
+- [x] **Step 1: Write the spec**
 
 Create `e2e/counting-flow.spec.ts`:
 
@@ -403,7 +403,7 @@ A few concrete notes on choices made above, so a reviewer doesn't have to re-der
 - `Increase count` is `CounterDialog`'s `aria-label` for the `+1` button — used once instead of a fourth `+10` purely so the total (31) isn't a suspiciously round multiple of 10, making a copy-paste/off-by-one bug more visible if one existed.
 - The report assertions use `page.locator('tr', { hasText: ... })` rather than a `data-testid` (none exist in this codebase's convention — every other component here is styled inline with no test hooks) — `hasText` matching against the real rendered category name and the literal "Total" row is a faithful re-derivation of `src/app/report/[eventId]/page.tsx`'s actual `<tr><td>{row.name}</td><td>{row.count}</td></tr>` / `<tr><td>Total</td><td>{totals.grand}</td></tr>` markup, not an assumption.
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 ```bash
 npx tsc --noEmit
@@ -411,7 +411,7 @@ npx tsc --noEmit
 
 Expected: clean.
 
-- [ ] **Step 3: Confirm the spec is picked up by the intended project only**
+- [x] **Step 3: Confirm the spec is picked up by the intended project only**
 
 ```bash
 npx playwright test --list
@@ -421,7 +421,7 @@ This lists tests without starting the `webServer` or running anything — it's a
 
 If this command's dry-run turns out to still invoke `globalSetup` (some Playwright versions run global setup even for `--list`) and that fails locally for lack of a reachable Postgres/allowlist row, that failure is expected and fine in this environment — it does not require a code change, only a real database (Task 4's job).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add e2e/counting-flow.spec.ts
