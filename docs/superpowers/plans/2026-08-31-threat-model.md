@@ -153,3 +153,11 @@ regardless still runs, just without a redundant earlier check.
   `p/javascript` rulesets) already runs on every push/PR in the same workflow file and
   does work on private repos, so static analysis coverage isn't entirely absent in the
   meantime.
+- **No branch protection on `main`.** Confirmed 2026-09-04 that this is the same
+  GitHub plan-tier gate as CodeQL above, not a separate gap: `gh api
+  repos/.../branches/main/protection` and the newer `rulesets` endpoint both return
+  "Upgrade to GitHub Pro or make this repository public to enable this feature."
+  Practically low-risk today — the owner is the sole contributor with push access —
+  but it means nothing currently stops a mistaken force-push or a bad commit from
+  landing on `main` without CI having run. Revisit alongside the CodeQL decision
+  above, since both unlock together.
