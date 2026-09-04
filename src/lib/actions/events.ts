@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client'
 import { ZodError } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, requireUser, AuthzError } from '@/lib/authz'
-import { isUniqueConstraintError } from '@/lib/actions/speakers'
+import { isUniqueConstraintError } from '@/lib/prisma-errors'
 import { createEventSchema, serviceDateSchema, idSchema, friendlyValidationMessage } from '@/lib/validation'
 import { todayServiceDate, formatServiceDate } from '@/lib/dates'
 

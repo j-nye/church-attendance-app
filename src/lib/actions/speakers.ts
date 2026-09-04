@@ -1,19 +1,14 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/authz'
 import { addSpeakerSchema, removeSpeakerSchema, idSchema } from '@/lib/validation'
+import { isUniqueConstraintError } from '@/lib/prisma-errors'
 
 export type Speaker = {
   id: string
   name: string
-}
-
-/** True when `error` is a Prisma unique-constraint violation (P2002). */
-export function isUniqueConstraintError(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
 }
 
 /** Speakers for the entry screen and report page, in the order they were added. */

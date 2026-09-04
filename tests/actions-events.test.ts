@@ -37,7 +37,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
-vi.mock('@/lib/actions/speakers', () => ({
+vi.mock('@/lib/prisma-errors', () => ({
   isUniqueConstraintError: (error: unknown) =>
     error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002',
 }))
