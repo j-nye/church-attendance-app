@@ -99,22 +99,53 @@ export default async function HelpPage() {
         <section id="categories" className="card" style={{ marginBottom: 'var(--space-6)' }}>
           <h2 style={{ marginTop: 0 }}>Categories (Admins)</h2>
           <p>
-            In Settings, <strong>Add a category</strong> creates a new Section, Classroom, Growth
-            Track, Serve Team, or Ministry Metric, which appears on the entry screen right away.
+            In Settings, categories are grouped into five sections — Sanctuary, Classrooms,
+            Growth Track, Serve Team, and Ministry Metrics. Each section has its own <strong>Add
+            category</strong> form at the bottom, so a new category&apos;s type is set by which
+            section you add it to, not by picking from a dropdown.
           </p>
           <p>
-            A category&apos;s position on the sanctuary map is fixed when it&apos;s created. A
-            category not tied to a map position still works fine — it just appears as a list row
-            instead of a map tap-target.
+            The <strong>↑</strong> / <strong>↓</strong> arrows reorder categories within a
+            section — that&apos;s the order volunteers see on the entry screen.{' '}
+            <strong>Rename</strong> just changes the display name; since past records are tied to
+            the category itself, not its name, renaming doesn&apos;t touch history.
           </p>
           <p>
-            <strong>Retire</strong> hides a category from new counting without deleting its
-            history — past reports and CSV exports still show whatever was recorded for it before
-            it was retired.
+            <strong>Edit</strong> changes a category&apos;s type, its position on the sanctuary
+            map, or whether it counts toward the Total. Because that changes how every past
+            report groups and totals this category — not just future ones — you have to check a
+            warning box before Save turns on.
           </p>
           <p>
-            Renaming, reordering, un-retiring, and deleting a category outright aren&apos;t
-            available yet — that&apos;s coming in a future update.
+            <strong>Hide</strong> moves a category into that section&apos;s Hidden list, off the
+            entry screen, without losing anything already recorded for it — past reports and CSV
+            exports are unaffected. <strong>Show</strong>, in the Hidden list, brings it back.
+          </p>
+          <p>
+            <strong>Delete</strong> only shows up for a category that has never had a count
+            recorded. Once a category has history, Hide is the way to remove it from the entry
+            screen — Delete stays unavailable so a past report can&apos;t lose the category it
+            points to. Deleting is permanent and asks for confirmation first.
+          </p>
+        </section>
+
+        <section id="services" className="card" style={{ marginBottom: 'var(--space-6)' }}>
+          <h2 style={{ marginTop: 0 }}>Services (Admins)</h2>
+          <p>
+            In Settings, the <strong>Services</strong> section creates a new service: give it a
+            name and a date. The date defaults to the upcoming Sunday, but you can pick any
+            date — useful for a midweek service or a one-off event.
+          </p>
+          <p>Below the form is a list of recent services, most recent first, including archived ones.</p>
+          <p>
+            <strong>Archive</strong> stops a service from accepting new counts or edits — it
+            drops off the volunteer dashboard — but its history stays exactly as it was: reports
+            and CSV exports for that service keep working the same as before. You&apos;ll be
+            asked to confirm before it takes effect.
+          </p>
+          <p>
+            <strong>Unarchive</strong> reverses a mistaken archive, putting the service back on
+            the dashboard so counting can continue.
           </p>
         </section>
 
