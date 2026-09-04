@@ -143,21 +143,28 @@ regardless still runs, just without a redundant earlier check.
   point-in-time restore on paid plans, but whether that's configured, tested, or even
   enabled for this project isn't something the codebase can answer — that's an open
   question for whoever manages the Neon account, not something to assume is handled.
-- **CodeQL is off, and should stay off for now.** `.github/workflows/codeql.yml` gates
-  its one job on `if: vars.ENABLE_CODEQL == 'true'`, with a comment explaining why:
-  "Code scanning is unavailable on free private repos. When the repo goes public, set
-  the repository variable ENABLE_CODEQL to \"true\"." A live check
-  (`gh repo view --json visibility`) confirms this repo is currently **PRIVATE**, so
-  CodeQL genuinely cannot run yet — this isn't a gap to close now, just something to
-  revisit if the repo's visibility ever changes. Semgrep (`p/typescript`, `p/nextjs`,
-  `p/javascript` rulesets) already runs on every push/PR in the same workflow file and
-  does work on private repos, so static analysis coverage isn't entirely absent in the
-  meantime.
-- **No branch protection on `main`.** Confirmed 2026-09-04 that this is the same
-  GitHub plan-tier gate as CodeQL above, not a separate gap: `gh api
-  repos/.../branches/main/protection` and the newer `rulesets` endpoint both return
-  "Upgrade to GitHub Pro or make this repository public to enable this feature."
-  Practically low-risk today — the owner is the sole contributor with push access —
-  but it means nothing currently stops a mistaken force-push or a bad commit from
-  landing on `main` without CI having run. Revisit alongside the CodeQL decision
-  above, since both unlock together.
+- **The repo is now public (owner's choice, 2026-09-04), which changes the asset
+  picture slightly.** The source code itself was already free of secrets — no
+  credentials, no `.env*` beyond `.env.example`, no real personal emails in any
+  tracked file (verified directly before the visibility change, beyond gitleaks'
+  own clean per-commit scan) — so the switch doesn't expose anything that wasn't
+  already treated as sensitive. It does mean the app's authorization logic,
+  including the exact shape of `requireUser()`/`requireAdmin()` and this threat
+  model itself, is now readable by anyone. Nothing in the design relies on the
+  source being secret (the real boundary is the Allowlist table and `AUTH_SECRET`,
+  neither of which live in the repo), so this is a low-risk trade, made to unlock
+  the two items below.
+- **CodeQL is now enabled** (`ENABLE_CODEQL` repository variable set to `true`,
+  2026-09-04) — `.github/workflows/codeql.yml`'s gate (`if: vars.ENABLE_CODEQL ==
+  'true'`) was unblocked by the repo going public, exactly as its own comment
+  anticipated. Runs alongside the existing Semgrep scan (`p/typescript`,
+  `p/nextjs`, `p/javascript`) in the same CI pipeline.
+- **Branch protection on `main` is now active** (2026-09-04): the `test`,
+  `semgrep`, and `gitleaks` checks are required and must be up to date before a
+  merge is accepted; force-pushes and branch deletion are disabled. `enforce_admins`
+  is deliberately `false` — the owner (as the repo's sole admin) can still push
+  directly to `main`, matching the existing solo-maintainer workflow. Any future
+  non-admin collaborator would be forced through a pull request with passing
+  checks. This was blocked by the same GitHub plan-tier gate as CodeQL until the
+  repo went public — confirmed at the time via `gh api repos/.../branches/main/protection`
+  returning "Upgrade to GitHub Pro or make this repository public."
