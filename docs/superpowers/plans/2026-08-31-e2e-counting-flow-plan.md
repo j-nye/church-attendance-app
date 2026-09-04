@@ -169,7 +169,7 @@ git commit -m "ci: add a Postgres service container and migrate/seed steps for e
 
 No red/green cycle. Verified by: (a) `npx tsc --noEmit` (the repo's `tsconfig.json` `include` is `**/*.ts` with no exclusion for `e2e/`, so this new file is type-checked for free), (b) a standalone dry-run of the one genuinely risky primitive — `encode()`/`decode()` round-tripping against this repo's actual installed `next-auth`/`@auth/core` — already executed once while writing this plan (see the note below; the implementer should re-run it to confirm for themselves), and (c) true behavioral verification (does the app actually accept this cookie as a valid session) is deferred to Task 4's description of what a passing CI run looks like, since exercising it for real means starting the built app on port 3000, which this implementation must not do while the dev server is running there for manual testing.
 
-- [ ] **Step 1: Confirm the `encode()`/`decode()` contract against the real installed package**
+- [x] **Step 1: Confirm the `encode()`/`decode()` contract against the real installed package**
 
 This was done once already while researching this plan, and produced a clean round-trip. Re-confirm it before wiring the real file, using a **throwaway script deleted immediately after**, so nothing beyond the plan file is left behind:
 
@@ -204,7 +204,7 @@ Also confirms (by reading `session.js` alongside this) that when the app later d
 
 `git status --short` must show nothing after `rm` — confirm before moving on.
 
-- [ ] **Step 2: Create `e2e/global-setup.ts`**
+- [x] **Step 2: Create `e2e/global-setup.ts`**
 
 ```ts
 import { config } from 'dotenv'
@@ -272,7 +272,7 @@ export default async function globalSetup() {
 }
 ```
 
-- [ ] **Step 3: Wire `globalSetup` and add the `projects` array to `playwright.config.ts`**
+- [x] **Step 3: Wire `globalSetup` and add the `projects` array to `playwright.config.ts`**
 
 Replace the full contents of `playwright.config.ts`:
 
@@ -309,7 +309,7 @@ export default defineConfig({
 
 Confirmed via Context7 (Playwright 1.61 docs, `packages/playwright/src/runner/tasks.ts`) that `createGlobalSetupTasks` places plugin setup — which is what starts `webServer` — **before** the `globalSetup` task in the runner's task list, so the server is already listening at `http://localhost:3000` by the time `global-setup.ts` opens its browser context. No race to guard against.
 
-- [ ] **Step 4: Gitignore the generated storage-state file**
+- [x] **Step 4: Gitignore the generated storage-state file**
 
 Add to `.gitignore` (a new line, anywhere in the file — e.g. under the existing `# testing` section):
 
@@ -319,7 +319,7 @@ Add to `.gitignore` (a new line, anywhere in the file — e.g. under the existin
 
 This directory contains a live, secret-signed session token whenever a developer runs the suite locally — it must never be committed.
 
-- [ ] **Step 5: Type-check**
+- [x] **Step 5: Type-check**
 
 ```bash
 npx tsc --noEmit
@@ -327,7 +327,7 @@ npx tsc --noEmit
 
 Expected: clean. This is the primary verification for this task — it confirms `e2e/global-setup.ts` type-checks against the real `next-auth/jwt` and `@playwright/test` type definitions (not just against what this plan assumed while being written), and that `playwright.config.ts`'s new import of `STORAGE_STATE_PATH` resolves.
 
-- [ ] **Step 6: Confirm `git status --short` shows only the intended files**
+- [x] **Step 6: Confirm `git status --short` shows only the intended files**
 
 ```bash
 git status --short
@@ -335,7 +335,7 @@ git status --short
 
 Expected: `e2e/global-setup.ts` (new), `playwright.config.ts` (modified), `.gitignore` (modified) — nothing under `e2e/.auth/` (it doesn't exist yet; it's only created the first time `test:e2e` actually runs, which this task does not do).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add e2e/global-setup.ts playwright.config.ts .gitignore
