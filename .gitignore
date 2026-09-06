@@ -64,3 +64,6 @@ token.json
 
 # DAST scan output (scripts/security/dast.ts) — never commit scan results
 nuclei-results.json
+
+# Claude Code local session state (e.g. .claude/worktrees/ used by git-worktree-based sessions)
+.claude/
