@@ -1,7 +1,7 @@
 # Attendance sheet parity & accessible redesign
 
 **Date:** 2026-08-17
-**Status:** Approved, pending implementation plan
+**Status:** Shipped (2026-08-17 plan fully implemented; see git history through commit 7bb6351)
 
 ## Motivation
 

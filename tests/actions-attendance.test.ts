@@ -7,8 +7,28 @@ const revalidatePath = vi.fn()
 const eventFindUnique = vi.fn()
 const eventFindMany = vi.fn()
 const categoryFindUnique = vi.fn()
+const categoryFindMany = vi.fn()
 const attendanceUpsert = vi.fn()
 const attendanceFindMany = vi.fn()
+const speakerFindMany = vi.fn()
+
+const txAttendanceFindUnique = vi.fn()
+const txAttendanceDeleteMany = vi.fn()
+const txAuditLogCreate = vi.fn()
+// The interactive-transaction callback is invoked for real here, against a
+// fake tx client, so deleteCount's actual transaction logic runs in tests —
+// not just the top-level prisma mock.
+const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+  callback({
+    attendanceRecord: {
+      findUnique: (...args: unknown[]) => txAttendanceFindUnique(...args),
+      deleteMany: (...args: unknown[]) => txAttendanceDeleteMany(...args),
+    },
+    auditLog: {
+      create: (...args: unknown[]) => txAuditLogCreate(...args),
+    },
+  })
+)
 
 class AuthzError extends Error {
   constructor(public readonly code: 'UNAUTHENTICATED' | 'FORBIDDEN') {
@@ -30,11 +50,16 @@ vi.mock('@/lib/prisma', () => ({
     },
     category: {
       findUnique: (...args: unknown[]) => categoryFindUnique(...args),
+      findMany: (...args: unknown[]) => categoryFindMany(...args),
     },
     attendanceRecord: {
       upsert: (...args: unknown[]) => attendanceUpsert(...args),
       findMany: (...args: unknown[]) => attendanceFindMany(...args),
     },
+    serviceSpeaker: {
+      findMany: (...args: unknown[]) => speakerFindMany(...args),
+    },
+    $transaction: (...args: [callback: (tx: unknown) => Promise<unknown>]) => transaction(...args),
   },
 }))
 
@@ -42,7 +67,9 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
-const { saveCount, getEventCounts, getEventSummary, getExportRows } = await import('@/lib/actions/attendance')
+const { saveCount, getEventCounts, getEventSummary, getExportRows, getManageRows, deleteCount } = await import(
+  '@/lib/actions/attendance'
+)
 
 const VOLUNTEER = { email: 'vol@example.com', role: 'VOLUNTEER' as const }
 const ADMIN = { email: 'admin@example.com', role: 'ADMIN' as const }
@@ -54,8 +81,15 @@ beforeEach(() => {
   eventFindUnique.mockReset()
   eventFindMany.mockReset()
   categoryFindUnique.mockReset()
+  categoryFindMany.mockReset()
   attendanceUpsert.mockReset()
   attendanceFindMany.mockReset()
+  speakerFindMany.mockReset()
+  speakerFindMany.mockResolvedValue([])
+  transaction.mockClear()
+  txAttendanceFindUnique.mockReset()
+  txAttendanceDeleteMany.mockReset()
+  txAuditLogCreate.mockReset()
 })
 
 describe('saveCount', () => {
@@ -289,6 +323,7 @@ describe('getExportRows', () => {
     const result = await getExportRows([])
     expect(result).toEqual([])
     expect(eventFindMany).not.toHaveBeenCalled()
+    expect(speakerFindMany).not.toHaveBeenCalled()
   })
 
   it('flattens multiple events into one row array with the full 9-field shape', async () => {
@@ -358,5 +393,331 @@ describe('getExportRows', () => {
       },
       orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
     })
+  })
+
+  it("appends each event's speakers immediately after its attendance rows, with Category Type SPEAKER, Group Stage, and an empty Count", async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindMany.mockResolvedValue([
+      {
+        id: 'e1',
+        name: 'Sunday Service',
+        serviceDate: '2026-08-09',
+        isArchived: false,
+        records: [
+          {
+            count: 10,
+            recordedBy: 'vol@example.com',
+            category: { type: 'SECTION', name: 'Left Wing', countsTowardTotal: true },
+          },
+        ],
+      },
+    ])
+    speakerFindMany.mockResolvedValue([
+      {
+        id: 's1',
+        eventId: 'e1',
+        name: 'Pastor Jones',
+        recordedBy: 'vol@example.com',
+        createdAt: new Date('2026-08-09T09:00:00Z'),
+      },
+      {
+        id: 's2',
+        eventId: 'e1',
+        name: 'Guest Speaker',
+        recordedBy: 'vol2@example.com',
+        createdAt: new Date('2026-08-09T09:05:00Z'),
+      },
+    ])
+
+    const result = await getExportRows(['e1'])
+
+    expect(result).toEqual([
+      {
+        serviceDate: '2026-08-09',
+        serviceName: 'Sunday Service',
+        archived: false,
+        categoryType: 'SECTION',
+        group: 'Sanctuary',
+        categoryName: 'Left Wing',
+        count: 10,
+        countsTowardTotal: true,
+        recordedBy: 'vol@example.com',
+      },
+      {
+        serviceDate: '2026-08-09',
+        serviceName: 'Sunday Service',
+        archived: false,
+        categoryType: 'SPEAKER',
+        group: 'Stage',
+        categoryName: 'Pastor Jones',
+        count: '',
+        countsTowardTotal: false,
+        recordedBy: 'vol@example.com',
+      },
+      {
+        serviceDate: '2026-08-09',
+        serviceName: 'Sunday Service',
+        archived: false,
+        categoryType: 'SPEAKER',
+        group: 'Stage',
+        categoryName: 'Guest Speaker',
+        count: '',
+        countsTowardTotal: false,
+        recordedBy: 'vol2@example.com',
+      },
+    ])
+    expect(speakerFindMany).toHaveBeenCalledWith({
+      where: { eventId: { in: ['e1'] } },
+      orderBy: { createdAt: 'asc' },
+    })
+  })
+
+  it('appends nothing for an event that has no speakers', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindMany.mockResolvedValue([
+      {
+        id: 'e1',
+        name: 'Sunday Service',
+        serviceDate: '2026-08-09',
+        isArchived: false,
+        records: [
+          {
+            count: 10,
+            recordedBy: 'vol@example.com',
+            category: { type: 'SECTION', name: 'Left Wing', countsTowardTotal: true },
+          },
+        ],
+      },
+    ])
+    // speakerFindMany already defaults to [] via beforeEach.
+
+    const result = await getExportRows(['e1'])
+
+    expect(result).toHaveLength(1)
+    expect(result.every((row) => row.categoryType !== 'SPEAKER')).toBe(true)
+  })
+})
+
+describe('getManageRows', () => {
+  it('requires an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(getManageRows('e1')).rejects.toThrow(AuthzError)
+    expect(categoryFindMany).not.toHaveBeenCalled()
+    expect(attendanceFindMany).not.toHaveBeenCalled()
+  })
+
+  it('returns an active category with no record as an unrecorded row', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindMany.mockResolvedValue([{ id: 'c1', name: 'Main Hall', type: 'SECTION' }])
+    attendanceFindMany.mockResolvedValue([])
+
+    const result = await getManageRows('e1')
+
+    expect(result).toEqual([
+      {
+        categoryId: 'c1',
+        categoryName: 'Main Hall',
+        categoryType: 'SECTION',
+        count: undefined,
+        recordedBy: undefined,
+        updatedAt: undefined,
+      },
+    ])
+  })
+
+  it('includes a retired category that still has a recorded count', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindMany.mockResolvedValue([]) // the category has since been retired
+    const updatedAt = new Date('2026-08-09T10:00:00Z')
+    attendanceFindMany.mockResolvedValue([
+      {
+        categoryId: 'c9',
+        count: 7,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+        category: { id: 'c9', name: 'Old Annex', type: 'CLASSROOM' },
+      },
+    ])
+
+    const result = await getManageRows('e1')
+
+    expect(result).toEqual([
+      {
+        categoryId: 'c9',
+        categoryName: 'Old Annex',
+        categoryType: 'CLASSROOM',
+        count: 7,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+      },
+    ])
+  })
+
+  it('populates count, recordedBy, and updatedAt for an active category that has a record', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindMany.mockResolvedValue([{ id: 'c1', name: 'Main Hall', type: 'SECTION' }])
+    const updatedAt = new Date('2026-08-09T10:00:00Z')
+    attendanceFindMany.mockResolvedValue([
+      {
+        categoryId: 'c1',
+        count: 50,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+        category: { id: 'c1', name: 'Main Hall', type: 'SECTION' },
+      },
+    ])
+
+    const result = await getManageRows('e1')
+
+    expect(result).toEqual([
+      {
+        categoryId: 'c1',
+        categoryName: 'Main Hall',
+        categoryType: 'SECTION',
+        count: 50,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+      },
+    ])
+  })
+
+  it('unions active categories with recorded categories: an unrecorded active category, a recorded active category, and a recorded retired category all appear exactly once', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindMany.mockResolvedValue([
+      { id: 'c1', name: 'Main Hall', type: 'SECTION' }, // will have a record
+      { id: 'c2', name: 'Kids Room', type: 'CLASSROOM' }, // stays unrecorded
+    ])
+    const updatedAt = new Date('2026-08-09T10:00:00Z')
+    attendanceFindMany.mockResolvedValue([
+      {
+        categoryId: 'c1',
+        count: 50,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+        category: { id: 'c1', name: 'Main Hall', type: 'SECTION' },
+      },
+      {
+        categoryId: 'c9',
+        count: 7,
+        recordedBy: 'vol2@example.com',
+        updatedAt,
+        category: { id: 'c9', name: 'Old Annex', type: 'CLASSROOM' }, // retired category
+      },
+    ])
+
+    const result = await getManageRows('e1')
+
+    expect(result).toEqual([
+      {
+        categoryId: 'c1',
+        categoryName: 'Main Hall',
+        categoryType: 'SECTION',
+        count: 50,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+      },
+      {
+        categoryId: 'c2',
+        categoryName: 'Kids Room',
+        categoryType: 'CLASSROOM',
+        count: undefined,
+        recordedBy: undefined,
+        updatedAt: undefined,
+      },
+      {
+        categoryId: 'c9',
+        categoryName: 'Old Annex',
+        categoryType: 'CLASSROOM',
+        count: 7,
+        recordedBy: 'vol2@example.com',
+        updatedAt,
+      },
+    ])
+    expect(categoryFindMany).toHaveBeenCalledWith({
+      where: { isActive: true },
+      orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    })
+    expect(attendanceFindMany).toHaveBeenCalledWith({
+      where: { eventId: 'e1' },
+      include: { category: true },
+    })
+  })
+})
+
+describe('deleteCount', () => {
+  it('requires an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(deleteCount({ eventId: 'e1', categoryId: 'c1' })).rejects.toThrow(AuthzError)
+    expect(eventFindUnique).not.toHaveBeenCalled()
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects when the event is archived', async () => {
+    requireAdmin.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue({ id: 'e1', isArchived: true })
+    await expect(deleteCount({ eventId: 'e1', categoryId: 'c1' })).rejects.toThrow(
+      'That service is not accepting counts'
+    )
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects when the event does not exist', async () => {
+    requireAdmin.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue(null)
+    await expect(deleteCount({ eventId: 'e1', categoryId: 'c1' })).rejects.toThrow(
+      'That service is not accepting counts'
+    )
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('deletes by the exact compound key when a record exists, and writes an AuditLog row capturing what was destroyed', async () => {
+    requireAdmin.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue({ id: 'e1', isArchived: false })
+    txAttendanceFindUnique.mockResolvedValue({ eventId: 'e1', categoryId: 'c1', count: 42 })
+    txAttendanceDeleteMany.mockResolvedValue({ count: 1 })
+    txAuditLogCreate.mockResolvedValue({})
+
+    const result = await deleteCount({ eventId: 'e1', categoryId: 'c1' })
+
+    expect(txAttendanceFindUnique).toHaveBeenCalledWith({
+      where: { eventId_categoryId: { eventId: 'e1', categoryId: 'c1' } },
+    })
+    expect(txAuditLogCreate).toHaveBeenCalledWith({
+      data: {
+        actorEmail: ADMIN.email,
+        action: 'DELETE_COUNT',
+        eventId: 'e1',
+        categoryId: 'c1',
+        priorCount: 42,
+      },
+    })
+    expect(txAttendanceDeleteMany).toHaveBeenCalledWith({ where: { eventId: 'e1', categoryId: 'c1' } })
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('is a silent no-op and writes no audit row when nothing matches', async () => {
+    requireAdmin.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue({ id: 'e1', isArchived: false })
+    txAttendanceFindUnique.mockResolvedValue(null)
+
+    const result = await deleteCount({ eventId: 'e1', categoryId: 'c1' })
+
+    expect(result).toEqual({ ok: true })
+    expect(txAuditLogCreate).not.toHaveBeenCalled()
+    expect(txAttendanceDeleteMany).not.toHaveBeenCalled()
+  })
+
+  it('revalidates the entry, report, and manage paths for the affected event on success', async () => {
+    requireAdmin.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue({ id: 'e1', isArchived: false })
+    txAttendanceFindUnique.mockResolvedValue({ eventId: 'e1', categoryId: 'c1', count: 42 })
+    txAttendanceDeleteMany.mockResolvedValue({ count: 1 })
+    txAuditLogCreate.mockResolvedValue({})
+
+    await deleteCount({ eventId: 'e1', categoryId: 'c1' })
+
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/e1')
+    expect(revalidatePath).toHaveBeenCalledWith('/report/e1')
+    expect(revalidatePath).toHaveBeenCalledWith('/report/e1/manage')
   })
 })

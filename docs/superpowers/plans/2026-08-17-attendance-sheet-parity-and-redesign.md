@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** Shipped — all tasks implemented (see git history 4dcfc98..7bb6351); checkboxes below were never ticked during execution.
+
 **Goal:** Bring the app's tracked categories in line with the church's real paper attendance sheet, and make the UI colorblind-safe and legible (higher contrast, larger type, light/dark support).
 
 **Architecture:** Extend the existing `Category`/`CategoryType` model with two new type values (`GROWTH_TRACK`, `SERVICE_METRIC`) and one new field (`countsTowardTotal`), rewrite the seed data to match the real category list, restructure the entry screen to render one heading+layout per category type instead of a single flat list, and rework the CSS custom-property token system for a light-default / dark-media-query palette.

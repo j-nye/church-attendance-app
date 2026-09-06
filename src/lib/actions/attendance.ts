@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { requireUser, requireAdmin } from '@/lib/authz'
-import { saveCountSchema, idSchema } from '@/lib/validation'
+import { saveCountSchema, deleteCountSchema, idSchema } from '@/lib/validation'
 import { TYPE_LABELS } from '@/lib/category-labels'
 
 /**
@@ -102,7 +102,7 @@ export type ExportRow = {
   categoryType: string
   group: string
   categoryName: string
-  count: number
+  count: number | ''
   countsTowardTotal: boolean
   recordedBy: string
 }
@@ -112,24 +112,42 @@ export type ExportRow = {
  * events. Always includes recordedBy unconditionally — unlike
  * getEventSummary's per-row masking, this whole endpoint is admin-only end
  * to end, so there's no volunteer-facing view of this data to protect.
+ *
+ * Each event's rows are its attendance records, immediately followed by that
+ * same event's speakers — additive rows identifiable by
+ * `categoryType: 'SPEAKER'`, with an empty-string Count since a speaker
+ * isn't a headcount.
  */
 export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
   await requireAdmin()
   if (eventIds.length === 0) return []
 
-  const events = await prisma.event.findMany({
-    where: { id: { in: eventIds } },
-    include: {
-      records: {
-        include: { category: true },
-        orderBy: [{ category: { sortOrder: 'asc' } }, { category: { name: 'asc' } }],
+  const [events, speakers] = await Promise.all([
+    prisma.event.findMany({
+      where: { id: { in: eventIds } },
+      include: {
+        records: {
+          include: { category: true },
+          orderBy: [{ category: { sortOrder: 'asc' } }, { category: { name: 'asc' } }],
+        },
       },
-    },
-    orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
-  })
+      orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.serviceSpeaker.findMany({
+      where: { eventId: { in: eventIds } },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ])
 
-  return events.flatMap((event) =>
-    event.records.map((record) => ({
+  const speakersByEvent = new Map<string, typeof speakers>()
+  for (const speaker of speakers) {
+    const list = speakersByEvent.get(speaker.eventId) ?? []
+    list.push(speaker)
+    speakersByEvent.set(speaker.eventId, list)
+  }
+
+  return events.flatMap((event) => {
+    const attendanceRows: ExportRow[] = event.records.map((record) => ({
       serviceDate: event.serviceDate,
       serviceName: event.name,
       archived: event.isArchived,
@@ -140,5 +158,121 @@ export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
       countsTowardTotal: record.category.countsTowardTotal,
       recordedBy: record.recordedBy,
     }))
-  )
+
+    const speakerRows: ExportRow[] = (speakersByEvent.get(event.id) ?? []).map((speaker) => ({
+      serviceDate: event.serviceDate,
+      serviceName: event.name,
+      archived: event.isArchived,
+      categoryType: 'SPEAKER',
+      group: 'Stage',
+      categoryName: speaker.name,
+      count: '',
+      countsTowardTotal: false,
+      recordedBy: speaker.recordedBy,
+    }))
+
+    return [...attendanceRows, ...speakerRows]
+  })
+}
+
+export type ManageRow = {
+  categoryId: string
+  categoryName: string
+  categoryType: string
+  count?: number
+  recordedBy?: string
+  updatedAt?: Date
+}
+
+/**
+ * One row per category relevant to this service: every active category
+ * (mirrors what the entry screen shows) UNIONED with any category that has
+ * an existing record here even if it's since been retired — otherwise a
+ * stray record tied to a retired category would be invisible to the one
+ * page built to find and clean it up.
+ */
+export async function getManageRows(eventId: string): Promise<ManageRow[]> {
+  await requireAdmin()
+  const id = idSchema.parse(eventId)
+
+  const [categories, records] = await Promise.all([
+    prisma.category.findMany({
+      where: { isActive: true },
+      orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.attendanceRecord.findMany({
+      where: { eventId: id },
+      include: { category: true },
+    }),
+  ])
+
+  // A Map preserves insertion order and re-setting an existing key updates
+  // its value in place without moving it — so an active category that also
+  // has a record stays at its original (sorted) position, and a retired
+  // category with a record is appended at the end.
+  const rows = new Map<string, ManageRow>()
+  for (const category of categories) {
+    rows.set(category.id, {
+      categoryId: category.id,
+      categoryName: category.name,
+      categoryType: category.type,
+      count: undefined,
+      recordedBy: undefined,
+      updatedAt: undefined,
+    })
+  }
+  for (const record of records) {
+    rows.set(record.categoryId, {
+      categoryId: record.categoryId,
+      categoryName: record.category.name,
+      categoryType: record.category.type,
+      count: record.count,
+      recordedBy: record.recordedBy,
+      updatedAt: record.updatedAt,
+    })
+  }
+
+  return Array.from(rows.values())
+}
+
+/**
+ * Hard-deletes a specific record — the one truly irreversible action in an
+ * app that otherwise soft-deletes on principle. Reads the existing record
+ * inside an interactive transaction; if one exists, writes an AuditLog row
+ * and deletes it in that same transaction. If nothing matches (a
+ * double-click race, or the record is already gone), it's a silent no-op —
+ * no audit row, no error.
+ */
+export async function deleteCount(input: unknown) {
+  const user = await requireAdmin()
+  const { eventId, categoryId } = deleteCountSchema.parse(input)
+
+  const event = await prisma.event.findUnique({ where: { id: eventId } })
+  if (!event || event.isArchived) throw new Error('That service is not accepting counts')
+
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.attendanceRecord.findUnique({
+      where: { eventId_categoryId: { eventId, categoryId } },
+    })
+    if (!existing) return
+
+    // recordedBy/actorEmail come from the session — never from input.
+    await tx.auditLog.create({
+      data: {
+        actorEmail: user.email,
+        action: 'DELETE_COUNT',
+        eventId,
+        categoryId,
+        priorCount: existing.count,
+      },
+    })
+    // deleteMany, not delete — a double-click race (already gone by the
+    // second click) becomes a harmless no-op instead of a thrown P2025.
+    await tx.attendanceRecord.deleteMany({ where: { eventId, categoryId } })
+  })
+
+  revalidatePath(`/entry/${eventId}`)
+  revalidatePath(`/report/${eventId}`)
+  revalidatePath(`/report/${eventId}/manage`)
+  return { ok: true as const }
 }
