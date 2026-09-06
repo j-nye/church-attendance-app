@@ -29,7 +29,7 @@
     "deepmerge-ts": "^8.0.2"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
+    "@prisma/client": "^7.10.0",
     "@vercel/analytics": "^2.0.1",
     "next": "16.3.4",
     "next-auth": "^5.0.0-beta.32",
