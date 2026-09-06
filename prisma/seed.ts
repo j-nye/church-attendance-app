@@ -68,6 +68,44 @@ export async function seedCategories() {
       create: { ...category, sortOrder: index },
     })
   }
+
+  await normalizeCategorySortOrder()
+}
+
+/**
+ * One-time fix for the pre-2026-08-31 sortOrder scheme: every category
+ * created through the Settings "Add a category" form got the schema
+ * default sortOrder: 0, so every type's admin-added categories collided at
+ * 0 — harmless while sortOrder was purely cosmetic, but ambiguous now that
+ * moveCategory() swaps sortOrder with "the adjacent active category of the
+ * same type." This renumbers every ACTIVE category, grouped by type, to
+ * 0,1,2… in its current sortOrder order (ties broken by createdAt, then id,
+ * so the renumbering is deterministic and idempotent — running it twice in
+ * a row produces the same result the second time).
+ *
+ * Called from seedCategories() so `npm run db:seed` fixes existing ties in
+ * one step; safe to run repeatedly.
+ */
+export async function normalizeCategorySortOrder() {
+  const categories = await prisma.category.findMany({
+    where: { isActive: true },
+    orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+  })
+
+  const byType = new Map<string, typeof categories>()
+  for (const category of categories) {
+    const list = byType.get(category.type) ?? []
+    list.push(category)
+    byType.set(category.type, list)
+  }
+
+  for (const list of byType.values()) {
+    for (const [index, category] of list.entries()) {
+      if (category.sortOrder !== index) {
+        await prisma.category.update({ where: { id: category.id }, data: { sortOrder: index } })
+      }
+    }
+  }
 }
 
 async function main() {

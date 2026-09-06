@@ -36,7 +36,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
-const { listAllowlist, addAllowlistEntry, deactivateAllowlistEntry } = await import(
+const { listAllowlist, addAllowlistEntry, deactivateAllowlistEntry, addAllowlistEntryAction } = await import(
   '@/lib/actions/allowlist'
 )
 
@@ -174,5 +174,81 @@ describe('deactivateAllowlistEntry', () => {
       where: { id: 'id3' },
       data: { isActive: false },
     })
+  })
+})
+
+function allowlistFormData(fields: Record<string, string>): FormData {
+  const data = new FormData()
+  for (const [key, value] of Object.entries(fields)) data.set(key, value)
+  return data
+}
+
+describe('addAllowlistEntryAction', () => {
+  it('returns { ok: true } and upserts the entry for valid input', async () => {
+    requireAdmin.mockResolvedValue(admin)
+
+    const result = await addAllowlistEntryAction(
+      { ok: true },
+      allowlistFormData({ email: 'New@Example.com', role: 'VOLUNTEER' })
+    )
+
+    expect(result).toEqual({ ok: true })
+    expect(allowlistUpsert).toHaveBeenCalledWith({
+      where: { email: 'new@example.com' },
+      update: { role: 'VOLUNTEER', isActive: true },
+      create: { email: 'new@example.com', role: 'VOLUNTEER', isActive: true },
+    })
+  })
+
+  it('returns a friendly inline message instead of throwing for a malformed email', async () => {
+    requireAdmin.mockResolvedValue(admin)
+
+    const result = await addAllowlistEntryAction(
+      { ok: true },
+      allowlistFormData({ email: 'not-an-email', role: 'ADMIN' })
+    )
+
+    expect(result).toEqual({ ok: false, message: "Email address doesn't look like a valid email address." })
+    expect(allowlistUpsert).not.toHaveBeenCalled()
+  })
+
+  it('returns a friendly inline message when the session is no longer an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+
+    const result = await addAllowlistEntryAction(
+      { ok: true },
+      allowlistFormData({ email: 'new@example.com', role: 'VOLUNTEER' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'You are not authorized to do that.' })
+    expect(allowlistUpsert).not.toHaveBeenCalled()
+  })
+
+  it('re-adding an existing email is a normal update, not an error', async () => {
+    // addAllowlistEntry upserts on the unique email column, so there is no
+    // duplicate-email failure mode for this action to catch — see the
+    // plan's "Conflicts found" section.
+    requireAdmin.mockResolvedValue(admin)
+
+    const result = await addAllowlistEntryAction(
+      { ok: true },
+      allowlistFormData({ email: admin.email, role: 'ADMIN' })
+    )
+
+    expect(result).toEqual({ ok: true })
+    expect(allowlistUpsert).toHaveBeenCalledWith({
+      where: { email: admin.email },
+      update: { role: 'ADMIN', isActive: true },
+      create: { email: admin.email, role: 'ADMIN', isActive: true },
+    })
+  })
+
+  it('rethrows an unexpected error so the app error boundary still catches it', async () => {
+    requireAdmin.mockResolvedValue(admin)
+    allowlistUpsert.mockRejectedValue(new Error('connection reset'))
+
+    await expect(
+      addAllowlistEntryAction({ ok: true }, allowlistFormData({ email: 'new@example.com', role: 'VOLUNTEER' }))
+    ).rejects.toThrow('connection reset')
   })
 })

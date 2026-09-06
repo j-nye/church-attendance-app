@@ -1,52 +1,53 @@
 import Link from 'next/link'
-import { requireUser } from '@/lib/authz'
+import { requireUserPage } from '@/lib/authz'
 import { listEvents, getOrCreateTodayEvent } from '@/lib/actions/events'
 import { formatServiceDate } from '@/lib/dates'
+import { AppHeader } from '@/components/AppHeader'
+import { ServiceCard } from '@/components/ServiceCard'
 
 export default async function DashboardPage() {
-  const user = await requireUser()
+  const user = await requireUserPage()
   const events = await listEvents()
 
   return (
-    <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontSize: 'var(--text-xl)' }}>Services</h1>
-        {user.role === 'ADMIN' && <Link href="/settings">Settings</Link>}
-      </header>
+    <>
+      <AppHeader />
+      <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h1 style={{ fontSize: 'var(--text-xl)' }}>Services</h1>
+          {user.role === 'ADMIN' && <Link href="/settings">Settings</Link>}
+        </header>
 
-      <form
-        action={async () => {
-          'use server'
-          const { redirect } = await import('next/navigation')
-          const event = await getOrCreateTodayEvent()
-          redirect(`/entry/${event.id}`)
-        }}
-      >
-        <button
-          type="submit"
-          style={{
-            width: '100%', padding: 'var(--space-4)', fontSize: 'var(--text-lg)',
-            background: 'var(--color-accent)', color: 'var(--color-accent-contrast)', fontWeight: 700,
+        <form
+          action={async () => {
+            'use server'
+            const { redirect } = await import('next/navigation')
+            const event = await getOrCreateTodayEvent()
+            redirect(`/entry/${event.id}`)
           }}
         >
-          Start counting today&apos;s service
-        </button>
-      </form>
+          <button
+            type="submit"
+            style={{
+              width: '100%', padding: 'var(--space-4)', fontSize: 'var(--text-lg)',
+              background: 'var(--color-accent)', color: 'var(--color-accent-contrast)', fontWeight: 700,
+            }}
+          >
+            Start counting today&apos;s service
+          </button>
+        </form>
 
-      <ul style={{ listStyle: 'none', padding: 0, marginTop: 'var(--space-8)' }}>
-        {events.map((event) => (
-          <li key={event.id} className="card" style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-4)' }}>
-            <strong>{event.name}</strong>
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-              {formatServiceDate(event.serviceDate)}
-            </div>
-            <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-              <Link href={`/entry/${event.id}`}>Enter counts</Link>
-              <Link href={`/report/${event.id}`}>Summary</Link>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </main>
+        <ul style={{ listStyle: 'none', padding: 0, marginTop: 'var(--space-8)' }}>
+          {events.map((event) => (
+            <ServiceCard
+              key={event.id}
+              id={event.id}
+              name={event.name}
+              serviceDate={formatServiceDate(event.serviceDate)}
+            />
+          ))}
+        </ul>
+      </main>
+    </>
   )
 }
