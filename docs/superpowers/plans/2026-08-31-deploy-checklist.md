@@ -13,49 +13,78 @@ loading values into Doppler (step 4), and seeding the admin (step 6).
 
 ---
 
-## Progress checkpoint (2026-09-06) — read this first if resuming
+## Progress checkpoint (2026-09-06) — deploy complete, pending final manual verification
 
-Steps 1 and 3 are done; step 2 is next. Exact state:
+The first production deploy is live. Exact state, for anyone resuming or auditing:
 
 **Done:**
-- Neon: production project created — `church-attendance-app-prd` (id
-  `round-dew-37987776`, region `aws-us-east-2`, Postgres 18). Local dev's project
-  was renamed `church-attendance-app-dev` (id `snowy-queen-66161900`) for naming
-  consistency — no functional change, same connection host.
-- Doppler `prd` config (project `church-attendance-app`) already has `DATABASE_URL`,
-  `DIRECT_URL` (both pulled from the Neon prod project above via `neonctl
-  connection-string`), and a freshly generated `AUTH_SECRET` (step 3, distinct from
-  `dev`'s). Still missing: `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `SEED_ADMIN_EMAIL`.
-- Vercel: project `church-attendance-app` created under scope `jnyeonline` (via the
-  Vercel CLI, now installed and logged in as `jcnye2004-5201`), GitHub repo connected
-  (required installing/authorizing the Vercel GitHub App on `j-nye/church-attendance-app`
-  first — done). Node.js Version set to `22.x`, Build Command set to `npx prisma
-  migrate deploy && next build` (step 5, already done early since the CLI made it a
-  one-line change). **No deployment has been triggered yet** — deploying is a gated
-  action this assistant won't do without you explicitly saying so in the moment.
+- Neon: production project `church-attendance-app-prd` (id `round-dew-37987776`,
+  region `aws-us-east-2`, Postgres 18). Local dev's project renamed
+  `church-attendance-app-dev` (id `snowy-queen-66161900`) for naming consistency —
+  no functional change, same connection host.
+- **Production auth uses its own dedicated GCP project**, not the one hosting the dev
+  OAuth client — a stricter isolation than step 2 below originally called for (separate
+  client only). Project `church-attendance-auth` (number `802999904591`), created under
+  the `jnyeonline.com` organization. OAuth consent screen is External, published to
+  production. The Web application OAuth client is named "Church Attendance —
+  Production" with two authorized redirect URIs:
+  `https://attendance.mannachurch.app/api/auth/callback/google` and
+  `https://church-attendance-app-silk.vercel.app/api/auth/callback/google` (the
+  vercel.app one kept as a fallback that still works if the custom domain ever breaks).
+  **Note for future reference:** there is no CLI/API path to create this kind of OAuth
+  client — `gcloud iam oauth-clients` is a different product (Workforce Identity
+  Federation/IAP, incompatible with next-auth's Google provider), and the old
+  `gcloud iap oauth-brands`/`oauth-clients` trick that used to work is dead (Google shut
+  down the IAP OAuth Admin API on 2026-03-19). It's Cloud Console UI only, every time.
+- **Custom domain**: `attendance.mannachurch.app` (a subdomain of a newly purchased
+  domain, DNS hosted on Cloudflare) is attached to the Vercel project and verified.
+  Configured as a **CNAME** to the project-specific target Vercel returned (not the
+  generic `cname.vercel-dns.com`, and not an A record) — `vercel domains verify` prefers
+  CNAME over the A-record IP for any non-apex hostname once it detects Cloudflare DNS,
+  because a CNAME keeps resolving correctly if Vercel ever rotates the IP. Proxy status
+  is DNS-only (grey cloud) — a Cloudflare-proxied (orange cloud) record would fight with
+  Vercel's own TLS. The `*.vercel.app` domain from step 1 (`church-attendance-app-silk.
+  vercel.app`) still works too and is kept as the OAuth fallback above.
+- Doppler `prd` config (project `church-attendance-app`) has all six variables:
+  `DATABASE_URL`/`DIRECT_URL` (Neon prod), `AUTH_SECRET` (generated in step 3),
+  `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (from the dedicated GCP project above), and
+  `SEED_ADMIN_EMAIL=jnye@jnyeonline.com` (same as dev's admin — confirmed with the
+  owner, not just assumed).
+- Vercel: project `church-attendance-app` under scope `jnyeonline`, GitHub repo
+  connected, Node.js `22.x`, Build Command `npx prisma migrate deploy && next build`.
+- **Doppler → Vercel integration connected**, with three syncs (Doppler's UI only
+  allows one Vercel environment per sync, unlike the checklist's original phrasing of
+  "map to Development+Preview" as if it were one step): `dev`→Development,
+  `dev`→Preview (branch scope "All Preview Branches"), `prd`→Production. All Encrypted
+  type, no import. Confirmed via `vercel env ls` that all three environments received
+  their variables.
+- **First deploy shipped**: pushed to `main` (commit `d363635`, fast-forwarded to
+  `082f754..d363635`), Vercel built it, `prisma migrate deploy` applied all 4
+  migrations against the prod database before `next build` ran, deploy status is
+  Ready. Both `https://attendance.mannachurch.app` and the vercel.app fallback return
+  200 on `/login`.
+- **Production seeded**: ran `doppler run --project church-attendance-app --config prd
+  -- npm run db:seed`, then independently verified against the pooled prod host
+  (`ep-rough-field-axx8y7yc-pooler...`) rather than trusting the script's own output —
+  confirmed `jnye@jnyeonline.com` is `ADMIN`/`isActive: true` and 23 categories exist.
+  Worth the extra check: `tsx prisma/seed.ts` runs through `dotenvx`, which logs an
+  "injected env from .env.local" line even when doppler's own env vars take priority —
+  easy to misread as evidence the seed ran against the wrong (dev) database.
+- Admin sign-in confirmed working end-to-end by the owner at
+  `https://attendance.mannachurch.app` with `jnye@jnyeonline.com`.
 
-**Next, in order:**
-1. Find the assigned production domain: Vercel dashboard → `church-attendance-app` →
-   **Domains** in the left sidebar (shows the `*.vercel.app` domain even pre-deploy).
-2. Create the production Google OAuth client (step 2 below) using that domain for the
-   redirect URI, so it only needs to be set once.
-3. Put `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` into Doppler's `prd` config, and decide
-   `SEED_ADMIN_EMAIL` for production (the real admin's actual Google account — confirm
-   with the owner, don't assume it's the same as `dev`'s).
-4. Connect Doppler's Vercel integration (step 4 below) — not done yet — mapping
-   `dev`→Development+Preview, `prd`→Production, with Auto Sync + Auto Redeploy on.
-5. Trigger the first deploy, then steps 6–7 below (seed, verify) as written.
-6. Lower priority, not blocking a working deploy: the GitHub service token
-   (`gh-actions-prd`) for future CI workflows — see the plan file at
-   `~/.claude/plans/goofy-herding-pebble.md` for that part, still untouched.
+**Still open (step 7's remaining checks, not blocking — app is live):**
+1. Confirm the allowlist gate: a non-allowlisted Google account should land on
+   `/denied`.
+2. One real round-trip: save a count on the entry form, confirm it shows on the
+   report.
+
+**Deferred, not blocking:** the `gh-actions-prd` GitHub service token for future CI
+workflows — see `~/.claude/plans/goofy-herding-pebble.md`, still untouched.
 
 **Heads-up if this is a fresh session:** this checkout may show *other* unrelated
-uncommitted changes (seen mid-session on 2026-09-05: `AGENTS.md` gaining a "Security
-Scanning" section, `e2e/global-setup.ts`, `playwright.config.ts`, `prisma/seed.ts`,
-`.github/workflows/tests.yml`'s `SEED_VOLUNTEER_EMAIL`, `.gitignore`'s
-`nuclei-results.json` line) — those belong to other concurrent Claude sessions working
-on unrelated feature work in the same local checkout, not to this deploy task. Leave
-them alone; `git status` before touching anything broader than this checklist.
+uncommitted changes from concurrent Claude sessions working on unrelated feature work —
+leave them alone; `git status` before touching anything broader than this checklist.
 
 ---
 
