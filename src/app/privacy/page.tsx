@@ -25,15 +25,23 @@ export default function PrivacyPage() {
       <h2>Information we collect</h2>
       <p>
         When you sign in with Google, we receive your email address and use it to check
-        against our allowlist and to identify you inside the App. We do not store or
-        display your name, profile picture, or any other Google profile information —
-        only the email address is retained.
+        against our allowlist and to identify you inside the App. We also store
+        Google&rsquo;s stable account identifier (a &ldquo;subject&rdquo; ID) for your
+        account, so that your access stays correctly linked to your allowlist entry even
+        if your email address changes later. We do not store or display your name,
+        profile picture, or any other Google profile information.
       </p>
       <p>
         Once signed in, the App stores the attendance counts you or other volunteers
         enter (a number per category per church service), which email address recorded
         each count, and timestamps. If a count is later deleted, we keep a record of who
         deleted it and what the value was beforehand, for accountability.
+      </p>
+      <p>
+        When a volunteer records the speaker(s) for a service, the speaker&rsquo;s name is
+        also stored, along with which email address entered it, for the same
+        record-keeping purpose as attendance counts. A speaker does not need to be a user
+        of the App for their name to be recorded this way.
       </p>
 
       <h2>Google user data &amp; Limited Use</h2>

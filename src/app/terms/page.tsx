@@ -32,10 +32,9 @@ export default function TermsPage() {
 
       <h2>Your responsibilities</h2>
       <p>
-        When recording attendance, enter counts accurately and in good faith. If you
-        have administrator access, use it responsibly — administrator actions (editing
-        categories, managing the allowlist, exporting data, deleting counts) are logged
-        and attributed to your account.
+        When recording attendance, enter counts accurately and in good faith. Recording
+        a count attributes it to your account, and if you have administrator access and
+        delete a count, that action is logged and attributed to your account as well.
       </p>
 
       <h2>Access can be revoked</h2>
