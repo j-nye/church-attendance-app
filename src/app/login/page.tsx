@@ -17,8 +17,7 @@ export default function LoginPage() {
             We use Google Sign-In only to verify your identity: your Google account&rsquo;s email
             address is checked against an internal list of authorized volunteers and staff, and
             nothing else about your Google account is used. If your email isn&rsquo;t on that list,
-            signing in won&rsquo;t grant access. See our{' '}
-            <Link href="/privacy">Privacy Policy</Link> for full detail on what we collect and why.
+            signing in won&rsquo;t grant access.
           </p>
         </div>
         <div className="card" style={{ textAlign: 'center', maxWidth: '24rem', width: '100%' }}>
