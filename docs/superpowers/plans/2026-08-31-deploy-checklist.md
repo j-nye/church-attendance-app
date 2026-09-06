@@ -6,10 +6,10 @@ internet for the church," the **first** time. Follow it in order — later steps
 earlier ones are done. Re-deploys after this (just pushing to `main`) are much simpler
 and are covered at the end.
 
-You'll need accounts on: **Neon** (database), **Google Cloud Console** (sign-in), and
-**Vercel** (hosting). You do not need to touch a terminal for most of this — the two
-places you will run a command are generating a secret (step 3) and seeding the admin
-(step 6).
+You'll need accounts on: **Neon** (database), **Google Cloud Console** (sign-in),
+**Vercel** (hosting), and **Doppler** (secrets — see the repo root's `SETUP.md` if you
+haven't set it up yet). You'll touch a terminal for generating a secret (step 3),
+loading values into Doppler (step 4), and seeding the admin (step 6).
 
 ---
 
@@ -73,36 +73,54 @@ Either produces a long random string. Copy it for step 4 — you don't need to s
 anywhere else, and you don't need to run this command *on* Vercel, just wherever you
 have a terminal.
 
-## 4. Create the Vercel project and set environment variables
+## 4. Create the Vercel project and connect Doppler
 
-1. At [vercel.com](https://vercel.com), **Add New Project** and import the
-   `church-attendance-app` GitHub repository. Since the repo is private, Vercel's
-   GitHub App needs access granted to it during import.
-2. Vercel will auto-detect Next.js — leave the framework preset as-is.
-3. Under **Project Settings → General**, confirm/set the Node.js version to match
-   `package.json`'s `engines.node` (`22.x`) and `.nvmrc` (`22`).
-4. Under **Project Settings → Environment Variables**, add all six variables from
-   `.env.example`, scoped to **Production**:
+Environment variables for this project live in Doppler, not pasted directly into
+Vercel's dashboard — see the repo root's `SETUP.md` for the local half of this
+(`.envrc` + direnv). Just two Doppler configs are used: `dev` and `prd`. This step
+wires them into Vercel so Preview and Production deploys pick up the right values
+automatically.
 
-   | Variable | Production value |
+1. In Doppler, populate the `prd` config for the `church-attendance-app` project with
+   the six variables (same names as `.env.example`), all production values:
+
+   | Variable | `prd` value |
    |---|---|
    | `DATABASE_URL` | The **pooled** Neon connection string from step 1 |
    | `DIRECT_URL` | The **direct** Neon connection string from step 1 |
-   | `AUTH_SECRET` | The freshly generated value from step 3 — must differ from your local `.env.local` value |
+   | `AUTH_SECRET` | The freshly generated value from step 3 |
    | `AUTH_GOOGLE_ID` | The **production** OAuth client ID from step 2 — not the dev one |
    | `AUTH_GOOGLE_SECRET` | The **production** OAuth client secret from step 2 |
-   | `SEED_ADMIN_EMAIL` | The real admin's actual Google account email — not `e2e-admin@example.com` (that's only used by CI's automated tests) |
+   | `SEED_ADMIN_EMAIL` | The real admin's actual Google account email |
+
+   `dev` is already populated from `SETUP.md`'s Phase 1 (`doppler secrets upload
+   .env.local`) — nothing new to do there.
+2. At [vercel.com](https://vercel.com), **Add New Project** and import the
+   `church-attendance-app` GitHub repository. Vercel will auto-detect Next.js —
+   leave the framework preset as-is.
+3. Under **Project Settings → General**, confirm/set the Node.js version to match
+   `package.json`'s `engines.node` (`22.x`) and `.nvmrc` (`22`).
+4. In the Doppler dashboard, go to **Integrations → Vercel → Connect**, authorize
+   Doppler's access to your Vercel account, and select the `church-attendance-app`
+   Vercel project. Map Doppler configs to Vercel environments:
+   - `dev` → **Development** and **Preview** (Doppler's Vercel integration lets you
+     select more than one Vercel environment per config)
+   - `prd` → **Production**
+
+   This means PR preview deploys share your local dev Neon database and dev Google
+   OAuth client — simplest option for a solo-maintained project, at the cost of a
+   preview deploy being able to write real-looking data into the same database you
+   develop against. If that trade-off stops being acceptable later (e.g. once other
+   people open PRs), add a third `stg` config with its own Neon branch and remap
+   Preview to it — nothing else in this checklist changes.
+
+   Enable **Auto Sync** (pushes secret changes to Vercel automatically) and **Auto
+   Redeploy** (triggers a new deployment so the change actually takes effect — Vercel
+   bakes env vars in at build/runtime start, so a sync alone isn't enough).
 
    You do **not** need to set `AUTH_URL` or `AUTH_TRUST_HOST`. Auth.js v5 infers the
    host from request headers automatically, and auto-trusts the proxy on Vercel
    because Vercel sets its own `VERCEL` environment variable, which Auth.js checks for.
-5. Be deliberate about whether Preview deployments (from PRs) also get these
-   variables. Recommendation: **do not** point Preview deployments at the production
-   Neon database — either scope the variables to Production only, or give Preview its
-   own separate Neon branch. Mixing the two means a test PR could write real data into
-   production, or an accidental preview deploy could seed/reseed prod. This repo does
-   not currently document a Preview-environment database strategy — treat that as an
-   open question for whoever owns ongoing deploys.
 
 ## 5. Set the build command so migrations actually run
 
@@ -137,12 +155,10 @@ a build.
    settings above are saved). Watch the build logs to confirm `prisma migrate deploy`
    ran successfully before `next build` started.
 2. Once the deploy is live, run the seed script **once**, from your own machine,
-   pointed at the production database. Set `DATABASE_URL`, `DIRECT_URL`, and
-   `SEED_ADMIN_EMAIL` to the same production values you put in Vercel (e.g. export
-   them in your shell, or use a local `.env.production.local` file you do **not**
-   commit), then run:
+   pointed at the production database. No scratch env file needed — pull the `prd`
+   config's values from Doppler for just this one command:
    ```bash
-   npm run db:seed
+   doppler run --project church-attendance-app --config prd -- npm run db:seed
    ```
    This is a manual, one-time step — nothing in the build automatically seeds the
    database, and it shouldn't (you don't want every deploy re-running seed logic

@@ -21,17 +21,21 @@ deliberately generic — no church name or branding is hard-coded into the UI.
    ```bash
    npm ci
    ```
-3. **Configure environment variables** — copy `.env.example` to `.env.local` and fill
-   in each value:
-   - `DATABASE_URL` — pooled Postgres connection string (Neon).
-   - `DIRECT_URL` — direct (non-pooled) Postgres connection string, used by Prisma
-     for migrations.
-   - `AUTH_SECRET` — secret used by next-auth to sign sessions/tokens.
-   - `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` — Google OAuth client credentials (see
-     below).
-   - `SEED_ADMIN_EMAIL` — the email address that becomes the first `ADMIN` in the
-     Allowlist table when you run the seed script. Without it, `db:seed` fails and
-     nobody can sign in.
+3. **Configure environment variables** — secrets are managed in
+   [Doppler](https://doppler.com) and loaded into your shell automatically by
+   [direnv](https://direnv.net) via the committed `.envrc`. First time on a new
+   machine, follow [`SETUP.md`](./SETUP.md); after that, `doppler login` once and
+   `direnv allow` once per clone is all you need — no `.env.local` to copy around.
+
+   The six variables involved (see `.env.example` for the full list) are
+   `DATABASE_URL`, `DIRECT_URL` (pooled/direct Postgres connection strings, Neon),
+   `AUTH_SECRET` (signs next-auth sessions/tokens), `AUTH_GOOGLE_ID` /
+   `AUTH_GOOGLE_SECRET` (Google OAuth client credentials, see below), and
+   `SEED_ADMIN_EMAIL` (the email that becomes the first `ADMIN` in the Allowlist table
+   when you run the seed script — without it, `db:seed` fails and nobody can sign in).
+
+   Not using Doppler? Copy `.env.example` to `.env.local` and fill in each value
+   yourself instead — everything below works either way.
 4. **Run migrations:**
    ```bash
    npm run db:migrate
@@ -65,9 +69,10 @@ active in the Allowlist table (see below).
   ```bash
   npm test
   ```
-  Tests that need a real database load credentials from `.env.local`
-  (`tests/setup.ts`); if that file is absent (e.g. in CI), those tests skip
-  themselves instead of failing.
+  Tests that need a real database use whatever `DATABASE_URL`/`DIRECT_URL` are
+  already in your shell's environment (from direnv, or from `.env.local` via
+  `tests/setup.ts` if you're not using Doppler); if neither is present (e.g. in
+  CI), those tests skip themselves instead of failing.
 - **End-to-end tests** (Playwright):
   ```bash
   npm run test:e2e
@@ -89,6 +94,7 @@ active in the Allowlist table (see below).
 
 ## Learn More
 
+- [`SETUP.md`](./SETUP.md) — one-time Doppler + direnv setup for a new machine.
 - [`AGENTS.md`](./AGENTS.md) — conventions for contributors and coding agents
   (authorization patterns, Prisma conventions, validation, testing expectations).
 - [`docs/superpowers/`](./docs/superpowers) — specs and plans, including the
