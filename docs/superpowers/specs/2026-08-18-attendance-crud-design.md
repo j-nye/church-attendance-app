@@ -1,7 +1,7 @@
 # Full CRUD for attendance records
 
 **Date:** 2026-08-18
-**Status:** Approved, pending implementation plan
+**Status:** Approved (amended 2026-08-31: minimal audit log on delete), pending implementation plan
 
 ## Motivation
 
@@ -11,7 +11,7 @@ The second half of a two-part request (CSV export shipped first, as its own spec
 
 - **Create / Update:** already fully handled by the existing `saveCount` action. Unchanged by this spec.
 - **Read:** a new admin-only query, `getManageRows(eventId)`, returning one row per category relevant to a service.
-- **Delete:** genuinely new — a hard delete of a specific `AttendanceRecord` row, removing that fact entirely (the category reverts to unrecorded, `—`, not a recorded `0`). This is the one truly irreversible action anywhere in this app; everything else (categories, allowlist entries) is soft-delete/retire.
+- **Delete:** genuinely new — a hard delete of a specific `AttendanceRecord` row, removing that fact entirely (the category reverts to unrecorded, `—`, not a recorded `0`). This is the one truly irreversible action anywhere in this app; everything else (categories, allowlist entries) is soft-delete/retire. *Amended 2026-08-31:* the record row is still hard-deleted, but its prior state is captured in an `AuditLog` row (see "Audit log" below) so a destroyed count remains explainable.
 
 ## Access control
 
@@ -47,6 +47,35 @@ await prisma.attendanceRecord.deleteMany({ where: { eventId, categoryId } })
 
 Revalidates three paths on success: `/entry/<eventId>` (the volunteer tap-counter needs to show `—` again), `/report/<eventId>` (totals change), and `/report/<eventId>/manage` (the page itself).
 
+*Amended 2026-08-31:* before deleting, `deleteCount` reads the existing record inside an interactive transaction; if one exists, it writes an `AuditLog` row (see below) and performs the delete in that same transaction. If no record exists, it remains a silent no-op and writes no audit row.
+
+## Audit log (2026-08-31 amendment)
+
+Delete is the only irreversible action in an app that otherwise soft-deletes on principle, so `deleteCount` records what it destroyed. This replaces the original "no audit trail" non-goal, by explicit decision on 2026-08-31.
+
+New Prisma model:
+
+```prisma
+model AuditLog {
+  id         String   @id @default(cuid())
+  /// Derived from the session, never from input — same rule as recordedBy.
+  actorEmail String
+  /// 'DELETE_COUNT' for now. A string, not an enum, so a future audited
+  /// action doesn't need a schema migration.
+  action     String
+  eventId    String
+  categoryId String
+  priorCount Int
+  createdAt  DateTime @default(now())
+
+  @@index([eventId])
+}
+```
+
+Deliberately relation-free: audit rows store `eventId`/`categoryId` as plain strings with no foreign keys, so an audit entry can never be cascaded away or block a future cleanup — it must outlive whatever it references.
+
+No UI reads this table. Querying it is a direct-database task until a real need for a viewer appears (see non-goals).
+
 ## UI
 
 ### New route: `/report/<eventId>/manage`
@@ -74,12 +103,12 @@ A "Manage Records" link on `/report/<eventId>`, admin-only (same conditional as 
 
 - `tests/actions-attendance.test.ts` (extended):
   - `getManageRows` — requires admin; an active category with no record produces `undefined` fields; a retired category with an existing record still appears; an active category with a record has both populated; confirms the union logic with a case exercising all three.
-  - `deleteCount` — requires admin; rejects an archived event with the expected message; calls `deleteMany` with the exact compound key; a call where nothing matches doesn't throw.
+  - `deleteCount` — requires admin; rejects an archived event with the expected message; deletes by the exact compound key; a call where nothing matches doesn't throw; writes an `AuditLog` row (actor, action, ids, prior count) when a record existed, and writes none when nothing matched.
 - Manual verification: admin creates a record via Manage Records' Edit action, edits an existing one, deletes one and confirms it reverts to `—` on both the manage page and the entry screen (not just the manage page), and confirms a signed-in volunteer can't reach the page or trigger either action directly.
 
 ## Non-goals / out of scope
 
-- No audit trail of edits or deletes beyond what already exists (`recordedBy`/`updatedAt` on the current record) — a deleted record's prior state is not retained anywhere.
+- No audit trail of *edits* beyond what already exists (`recordedBy`/`updatedAt` on the current record), and no UI for viewing the delete audit log — `AuditLog` is written on delete (2026-08-31 amendment, replacing the original blanket "no audit trail" non-goal) but stays a direct-database query until a viewer is actually needed.
 - No bulk delete (a whole service's records at once) — one record at a time, matching the one-row-at-a-time table design.
 - No relaxing of the archived-event write restriction — editing/deleting stays scoped to active services only.
 - No new confirmation-modal component — `window.confirm()` is a deliberate, accepted trade-off for this one action.

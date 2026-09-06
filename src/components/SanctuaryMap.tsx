@@ -8,16 +8,81 @@ export function SanctuaryMap({
   categories,
   counts,
   onSelect,
+  onSelectStage,
+  speakerCount,
 }: {
   categories: Placed[]
   counts: Record<string, number>
   onSelect: (categoryId: string) => void
+  /** Opens the speaker dialog. Stage renders inert (as before) when omitted. */
+  onSelectStage?: () => void
+  /** Drives the Stage region's label — "N speakers" or "—" when 0/undefined. */
+  speakerCount?: number
 }) {
   const byKey = new Map(categories.map((category) => [category.svgKey, category]))
 
   return (
     <svg viewBox={MAP_VIEWBOX} role="group" aria-label="Sanctuary map" style={{ width: '100%', height: 'auto' }}>
       {MAP_REGIONS.map((region) => {
+        if (region.key === 'stage') {
+          const isTappable = Boolean(onSelectStage)
+          const hasSpeakers = Boolean(speakerCount)
+          const display = hasSpeakers ? `${speakerCount} speaker${speakerCount === 1 ? '' : 's'}` : '—'
+
+          return (
+            <g
+              key={region.key}
+              role={isTappable ? 'button' : undefined}
+              tabIndex={isTappable ? 0 : undefined}
+              aria-label={isTappable ? `Stage, ${hasSpeakers ? display : 'no speakers recorded'}` : undefined}
+              onClick={isTappable ? onSelectStage : undefined}
+              onKeyDown={
+                isTappable
+                  ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onSelectStage!()
+                      }
+                    }
+                  : undefined
+              }
+              style={{ cursor: isTappable ? 'pointer' : 'default' }}
+            >
+              <rect
+                x={region.x}
+                y={region.y}
+                width={region.width}
+                height={region.height}
+                rx={10}
+                fill={isTappable ? 'var(--color-surface-raised)' : 'var(--color-surface)'}
+                stroke={hasSpeakers ? 'var(--color-accent)' : 'var(--color-border)'}
+                strokeWidth={hasSpeakers ? 3 : 1.5}
+              />
+              <text
+                x={region.x + region.width / 2}
+                y={region.y + region.height / 2 - 6}
+                textAnchor="middle"
+                fill="var(--color-text)"
+                fontSize={14}
+              >
+                {region.label}
+              </text>
+              {isTappable && (
+                <text
+                  x={region.x + region.width / 2}
+                  y={region.y + region.height / 2 + 20}
+                  textAnchor="middle"
+                  fill="var(--color-accent)"
+                  fontSize={22}
+                  fontWeight={700}
+                >
+                  {display}
+                </text>
+              )}
+            </g>
+          )
+        }
+
         const category = byKey.get(region.key)
         const count = category ? counts[category.id] : undefined
         const label = category?.name ?? region.label

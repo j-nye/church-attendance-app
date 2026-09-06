@@ -1,11 +1,16 @@
 import { describe, it, expect, afterAll, beforeAll } from 'vitest'
 import { prisma } from '@/lib/prisma'
+import { isDatabaseReachable } from './db-probe'
 
 // These tests exercise the real Neon database to verify the constraints the
 // schema is supposed to enforce. They only run when DATABASE_URL is available
 // (populated locally from .env.local via tests/setup.ts); CI's `npm test` step
-// has no database credentials, so this whole suite skips there.
-const hasDatabase = Boolean(process.env.DATABASE_URL)
+// has no database credentials, so this whole suite skips there. The reachability
+// probe (see tests/db-probe.ts) also skips when DATABASE_URL is set but the
+// database can't be reached, so an unreachable DB skips in ~2s instead of
+// failing every test on its timeout.
+const hasDatabase =
+  Boolean(process.env.DATABASE_URL) && (await isDatabaseReachable(process.env.DATABASE_URL!))
 
 describe.skipIf(!hasDatabase)('schema constraints (live database)', () => {
   const runId = `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`

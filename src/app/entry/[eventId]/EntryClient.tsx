@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { SanctuaryMap } from '@/components/SanctuaryMap'
 import { CounterDialog } from '@/components/CounterDialog'
+import { SpeakerDialog } from '@/components/SpeakerDialog'
 import { CategoryRow } from '@/components/CategoryRow'
 import { CategoryCard } from '@/components/CategoryCard'
+import type { Speaker } from '@/lib/actions/speakers'
 
 type Category = { id: string; name: string; type: string; svgKey: string | null }
 
@@ -26,13 +28,17 @@ export function EntryClient({
   eventId,
   categories,
   initialCounts,
+  initialSpeakers,
 }: {
   eventId: string
   categories: Category[]
   initialCounts: Record<string, number>
+  initialSpeakers: Speaker[]
 }) {
   const [counts, setCounts] = useState(initialCounts)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [speakers, setSpeakers] = useState(initialSpeakers)
+  const [isSpeakerDialogOpen, setIsSpeakerDialogOpen] = useState(false)
 
   const sanctuaryOnMap = categories.filter(
     (c): c is Category & { svgKey: string } => c.type === 'SECTION' && Boolean(c.svgKey)
@@ -52,7 +58,13 @@ export function EntryClient({
   return (
     <>
       <h2 style={{ fontSize: 'var(--text-lg)' }}>Sanctuary</h2>
-      <SanctuaryMap categories={sanctuaryOnMap} counts={counts} onSelect={setSelectedId} />
+      <SanctuaryMap
+        categories={sanctuaryOnMap}
+        counts={counts}
+        onSelect={setSelectedId}
+        onSelectStage={() => setIsSpeakerDialogOpen(true)}
+        speakerCount={speakers.length}
+      />
       {sanctuaryListItems.map((category) => (
         <CategoryRow
           key={category.id}
@@ -105,6 +117,15 @@ export function EntryClient({
           initialCount={counts[selected.id] ?? 0}
           onClose={() => setSelectedId(null)}
           onSaved={(count) => setCounts((prev) => ({ ...prev, [selected.id]: count }))}
+        />
+      )}
+
+      {isSpeakerDialogOpen && (
+        <SpeakerDialog
+          eventId={eventId}
+          speakers={speakers}
+          onClose={() => setIsSpeakerDialogOpen(false)}
+          onChange={setSpeakers}
         />
       )}
     </>
