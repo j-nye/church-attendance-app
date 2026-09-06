@@ -121,6 +121,18 @@ async function main() {
   })
   console.log(`Seeded admin: ${adminEmail}`)
 
+  // Optional — only e2e/CI sets this, to seed the non-admin identity
+  // e2e/authz.spec.ts signs in as. Prod seeding leaves it unset.
+  const volunteerEmail = process.env.SEED_VOLUNTEER_EMAIL?.trim().toLowerCase()
+  if (volunteerEmail) {
+    await prisma.allowlist.upsert({
+      where: { email: volunteerEmail },
+      update: { role: 'VOLUNTEER', isActive: true },
+      create: { email: volunteerEmail, role: 'VOLUNTEER', isActive: true },
+    })
+    console.log(`Seeded volunteer: ${volunteerEmail}`)
+  }
+
   await seedCategories()
   console.log(`Retired ${RETIRED_CATEGORIES.length} categories no longer on the paper sheet`)
   console.log(`Seeded ${DEFAULT_CATEGORIES.length} categories`)

@@ -198,14 +198,39 @@ session.user.name   // optional (not used here)
 ## Testing
 
 - **Unit tests:** 17 specs in Vitest — fast, run first
-- **E2E tests:** 1 spec in Playwright against next-auth — covers the auth surface
+- **E2E tests:** 2 specs in Playwright against next-auth — auth surface plus the counting flow
 
 **The gap:** Counting logic (saveCount, getEventCounts) has only unit tests. E2E coverage is thin.
+
+**Running e2e locally uses a disposable database, not the real dev DB.** `.env.local` (and direnv's Doppler export in `.envrc`) point at the real Neon dev database — bare `npm run test:e2e` will write test fixtures (seeded allowlist rows, a real Event) into whatever database is currently active in your shell. Use `npm run test:e2e:local` instead: it starts a throwaway `postgres:16` Docker container (matching CI's service container, per the project's existing decision to use disposable Postgres rather than a Neon branch — see `docs/superpowers/plans/2026-08-31-roadmap.md`), and overrides `DATABASE_URL`/`DIRECT_URL`/`AUTH_SECRET` only in the spawned processes' env — never in a `.env` file, since a file-based override would be silently beaten by whatever direnv already exported into the shell. Requires Docker. `npm run db:test:down` stops the container when you're done.
 
 **When writing tests:**
 - Unit: test Zod schemas, business logic, Prisma queries with mocks
 - E2E: test auth flow and critical user paths (record a count, generate a report)
 - Don't e2e everything — keep the suite fast; only test high-risk flows
+
+---
+
+## Security Scanning
+
+Three tools, three different jobs. Don't conflate them — each catches something the others structurally can't.
+
+### SAST — Semgrep
+Runs in CI (`.github/workflows/tests.yml`'s `semgrep` job: `p/typescript`, `p/nextjs`, `p/javascript` against `src/`), required check on `main`. Catches source-level bug patterns before anything runs. Local check: `npm run security:sast` — runs the exact same config so a local pass means the CI job will pass too.
+
+### Secrets — gitleaks
+Already running (`gitleaks/gitleaks-action` in `tests.yml`), also a required check per the threat model (`docs/superpowers/plans/2026-08-31-threat-model.md`). Scans commit contents for things that look like credentials.
+
+**Gotcha:** this is why CI's placeholder env vars are named things like `AUTH_SECRET: ci-build-placeholder-not-a-real-secret` instead of any other filler string — a value that merely *looks* like a real secret risks a false positive (or, worse, someone "fixing" it into an actual one later without realizing why it was fake). Follow the same naming convention for any new fake credential you add to CI or test fixtures.
+
+### DAST — Nuclei (authenticated, local only)
+`npm run security:dast` mints a real next-auth session — via `next-auth/jwt`'s `encode()`, the same trick `e2e/global-setup.ts` uses to skip a real Google OAuth flow — and runs Nuclei against the running dev server with that session cookie attached, so it scans past the login wall instead of just hitting `/login`.
+
+**Deliberately scoped down, not a general-purpose scan:**
+- **Not in CI.** It needs the `nuclei` binary + `nuclei-templates` on the runner and a running `next start`; that's a bigger lift than this covers today. Run it locally before shipping something that touches routing, headers, or middleware.
+- **Only static pages** (`/dashboard`, `/settings` — see `scripts/security/dast-targets.txt`). `/entry/[eventId]` and `/report/[eventId]` need a real seeded event ID to be reachable and aren't crawlable, so they're out of scope until there's a clean fixture for that.
+- **Tags are `misconfig,exposure` only** — no `sqli`/`xss`/`cors`. This app's mutations are Next.js Server Actions (opaque POSTs with an encrypted action ID), not URL/form params, so generic injection templates have near-zero yield here. Don't add those tags back without a reason; they'll just add noise to triage.
+- **Cross-role authorization is not this tool's job.** "Can a VOLUNTEER reach an admin-only page" is covered by `e2e/authz.spec.ts` (a real Playwright assertion against `/settings`), not by a Nuclei template — that's a cheaper and more precise way to test that specific boundary.
 
 ---
 

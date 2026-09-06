@@ -13,10 +13,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:local": "tsx scripts/e2e-local.ts",
+    "db:test:down": "docker stop church-attendance-test-db",
     "prepare": "husky",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "security:sast": "semgrep scan --config=p/typescript --config=p/nextjs --config=p/javascript --error src/",
+    "security:dast": "tsx scripts/security/dast.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

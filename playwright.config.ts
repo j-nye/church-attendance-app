@@ -1,5 +1,5 @@
 import { defineConfig } from '@playwright/test'
-import { STORAGE_STATE_PATH } from './e2e/global-setup'
+import { STORAGE_STATE_PATH, VOLUNTEER_STORAGE_STATE_PATH } from './e2e/global-setup'
 
 export default defineConfig({
   testDir: './e2e',
@@ -32,6 +32,14 @@ export default defineConfig({
       name: 'authenticated',
       testMatch: /counting-flow\.spec\.ts/,
       use: { storageState: STORAGE_STATE_PATH },
+    },
+    {
+      // Pre-authenticated as a non-admin, to assert the VOLUNTEER/ADMIN
+      // boundary against a real page (see AGENTS.md's Security Scanning
+      // section for why this covers authz instead of the Nuclei scan).
+      name: 'volunteer',
+      testMatch: /authz\.spec\.ts/,
+      use: { storageState: VOLUNTEER_STORAGE_STATE_PATH },
     },
   ],
 })

@@ -61,3 +61,6 @@ token.json
 /playwright-report
 /test-results
 /coverage
+
+# DAST scan output (scripts/security/dast.ts) — never commit scan results
+nuclei-results.json

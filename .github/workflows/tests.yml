@@ -53,6 +53,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/church_attendance_test
           DIRECT_URL: postgresql://postgres:postgres@localhost:5432/church_attendance_test
           SEED_ADMIN_EMAIL: e2e-admin@example.com
+          SEED_VOLUNTEER_EMAIL: e2e-volunteer@example.com
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Run end-to-end tests
