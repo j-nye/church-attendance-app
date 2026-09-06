@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { SignInButton } from '@/components/SignInButton'
 
 export default function LoginPage() {
@@ -9,6 +10,9 @@ export default function LoginPage() {
           Sign in with the Google account your church administrator authorized.
         </p>
         <SignInButton />
+        <p style={{ marginTop: 'var(--space-4)', fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
+          <Link href="/privacy">Privacy Policy</Link> · <Link href="/terms">Terms of Service</Link>
+        </p>
       </div>
     </main>
   )
