@@ -13,6 +13,52 @@ loading values into Doppler (step 4), and seeding the admin (step 6).
 
 ---
 
+## Progress checkpoint (2026-09-06) — read this first if resuming
+
+Steps 1 and 3 are done; step 2 is next. Exact state:
+
+**Done:**
+- Neon: production project created — `church-attendance-app-prd` (id
+  `round-dew-37987776`, region `aws-us-east-2`, Postgres 18). Local dev's project
+  was renamed `church-attendance-app-dev` (id `snowy-queen-66161900`) for naming
+  consistency — no functional change, same connection host.
+- Doppler `prd` config (project `church-attendance-app`) already has `DATABASE_URL`,
+  `DIRECT_URL` (both pulled from the Neon prod project above via `neonctl
+  connection-string`), and a freshly generated `AUTH_SECRET` (step 3, distinct from
+  `dev`'s). Still missing: `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `SEED_ADMIN_EMAIL`.
+- Vercel: project `church-attendance-app` created under scope `jnyeonline` (via the
+  Vercel CLI, now installed and logged in as `jcnye2004-5201`), GitHub repo connected
+  (required installing/authorizing the Vercel GitHub App on `j-nye/church-attendance-app`
+  first — done). Node.js Version set to `22.x`, Build Command set to `npx prisma
+  migrate deploy && next build` (step 5, already done early since the CLI made it a
+  one-line change). **No deployment has been triggered yet** — deploying is a gated
+  action this assistant won't do without you explicitly saying so in the moment.
+
+**Next, in order:**
+1. Find the assigned production domain: Vercel dashboard → `church-attendance-app` →
+   **Domains** in the left sidebar (shows the `*.vercel.app` domain even pre-deploy).
+2. Create the production Google OAuth client (step 2 below) using that domain for the
+   redirect URI, so it only needs to be set once.
+3. Put `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` into Doppler's `prd` config, and decide
+   `SEED_ADMIN_EMAIL` for production (the real admin's actual Google account — confirm
+   with the owner, don't assume it's the same as `dev`'s).
+4. Connect Doppler's Vercel integration (step 4 below) — not done yet — mapping
+   `dev`→Development+Preview, `prd`→Production, with Auto Sync + Auto Redeploy on.
+5. Trigger the first deploy, then steps 6–7 below (seed, verify) as written.
+6. Lower priority, not blocking a working deploy: the GitHub service token
+   (`gh-actions-prd`) for future CI workflows — see the plan file at
+   `~/.claude/plans/goofy-herding-pebble.md` for that part, still untouched.
+
+**Heads-up if this is a fresh session:** this checkout may show *other* unrelated
+uncommitted changes (seen mid-session on 2026-09-05: `AGENTS.md` gaining a "Security
+Scanning" section, `e2e/global-setup.ts`, `playwright.config.ts`, `prisma/seed.ts`,
+`.github/workflows/tests.yml`'s `SEED_VOLUNTEER_EMAIL`, `.gitignore`'s
+`nuclei-results.json` line) — those belong to other concurrent Claude sessions working
+on unrelated feature work in the same local checkout, not to this deploy task. Leave
+them alone; `git status` before touching anything broader than this checklist.
+
+---
+
 ## 1. Create the Neon production database
 
 1. Sign in at [neon.tech](https://neon.tech) and create a **new project** for
