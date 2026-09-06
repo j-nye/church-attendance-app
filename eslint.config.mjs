@@ -8,7 +8,10 @@ const eslintConfig = defineConfig([
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
-    ".next/**",
+    // Not anchored to root: a nested build directory (e.g. inside a
+    // .claude/worktrees/* git worktree) would otherwise get linted too.
+    "**/.next/**",
+    "**/node_modules/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

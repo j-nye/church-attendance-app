@@ -40,6 +40,18 @@ describe('proxy (redirect UX only, not a security boundary)', () => {
     expect(res).toBeUndefined()
   })
 
+  it('does not redirect an unauthenticated visitor already on /privacy', async () => {
+    const { default: middleware } = await import('@/proxy')
+    const res = middleware(makeReq('/privacy', false) as never, {} as never)
+    expect(res).toBeUndefined()
+  })
+
+  it('does not redirect an unauthenticated visitor already on /terms', async () => {
+    const { default: middleware } = await import('@/proxy')
+    const res = middleware(makeReq('/terms', false) as never, {} as never)
+    expect(res).toBeUndefined()
+  })
+
   it('does not redirect an authenticated visitor on a protected path', async () => {
     const { default: middleware } = await import('@/proxy')
     const res = middleware(makeReq('/dashboard', true) as never, {} as never)

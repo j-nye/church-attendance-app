@@ -8,7 +8,7 @@ import { auth } from '@/lib/auth'
 export default auth((req) => {
   const isAuthed = Boolean(req.auth?.user?.email)
   const { pathname } = req.nextUrl
-  const isPublic = pathname === '/login' || pathname === '/denied'
+  const isPublic = pathname === '/login' || pathname === '/denied' || pathname === '/privacy' || pathname === '/terms'
 
   if (!isAuthed && !isPublic) {
     return Response.redirect(new URL('/login', req.nextUrl))
