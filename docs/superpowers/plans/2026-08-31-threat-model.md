@@ -137,12 +137,14 @@ regardless still runs, just without a redundant earlier check.
   no audit trail at all beyond each record's own `updatedAt` timestamp. If an admin's
   account is misused to, say, silently change a bunch of historical counts (not delete
   them), there is no log of what the value was before.
-- **Single shared Neon database, no documented backup or read-replica strategy.**
-  Neither `README.md` nor anything else in this repo describes a backup policy,
-  point-in-time recovery plan, or read replica. Neon's own platform does offer
-  point-in-time restore on paid plans, but whether that's configured, tested, or even
-  enabled for this project isn't something the codebase can answer — that's an open
-  question for whoever manages the Neon account, not something to assume is handled.
+- **Single shared Neon database, 6-hour point-in-time-restore window, no other backup.**
+  Checked directly against the production project (2026-09-06): `church-attendance-app-prd`
+  is on Neon's Free plan, which caps `history_retention_seconds` at 21600 (6 hours) —
+  not adjustable without upgrading to Launch (7 days) or Scale (30 days). There is no
+  other backup mechanism (no scheduled `pg_dump`, no read replica). **Owner decision
+  (2026-09-06): accepted as-is, not worth the cost/effort for this app's data
+  sensitivity.** Revisit only if the data this app holds becomes more consequential to
+  lose, or if a real incident makes 6 hours feel too short in hindsight.
 - **The repo is now public (owner's choice, 2026-09-04), which changes the asset
   picture slightly.** The source code itself was already free of secrets — no
   credentials, no `.env*` beyond `.env.example`, no real personal emails in any
