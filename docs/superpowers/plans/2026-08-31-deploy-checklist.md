@@ -16,8 +16,9 @@ loading values into Doppler (step 4), and seeding the admin (step 6).
 ## 1. Create the Neon production database
 
 1. Sign in at [neon.tech](https://neon.tech) and create a **new project** for
-   production — do not reuse whatever project/branch you used for local development.
-   A name like `church-attendance-prod` is fine.
+   production — do not reuse whatever project/branch you used for local development
+   (that one is named `church-attendance-app-dev`). Name this one
+   `church-attendance-app-prd`, matching Doppler's `prd` config.
 2. On the project's dashboard, find **Connection Details** (sometimes called
    "Connect"). Neon gives you two connection strings you need:
    - **Pooled connection** (the hostname usually contains `-pooler`) — this is your
