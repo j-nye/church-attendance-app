@@ -38,6 +38,11 @@ model Event {
   name        String
   /// Church-local calendar date as YYYY-MM-DD. NOT a timestamp — see src/lib/dates.ts.
   serviceDate String
+  /// Church-local start time as 24-hour "HH:mm". NOT a timestamp and NOT
+  /// timezone-converted — same reasoning as serviceDate. Multiple services can
+  /// share a serviceDate; this is what distinguishes and orders them.
+  /// Existing rows were backfilled to '09:30' when this column was added.
+  startTime   String
   isArchived  Boolean            @default(false)
   createdAt   DateTime           @default(now())
   records     AttendanceRecord[]
@@ -45,6 +50,7 @@ model Event {
 
   @@unique([serviceDate, name])
   @@index([serviceDate])
+  @@index([serviceDate, startTime])
 }
 
 model Category {

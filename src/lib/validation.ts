@@ -78,9 +78,21 @@ export const renameCategorySchema = z.object({
   name: z.string().trim().min(1).max(CATEGORY_NAME_MAX),
 })
 
+/** Church-local 24-hour "HH:mm". Not a timestamp — see src/lib/dates.ts. */
+export const startTimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Service time must be a 24-hour HH:mm time')
+
 export const createEventSchema = z.object({
   name: z.string().trim().min(1).max(EVENT_NAME_MAX),
   serviceDate: serviceDateSchema,
+  startTime: startTimeSchema,
+})
+
+export const updateEventScheduleSchema = z.object({
+  id: idSchema,
+  serviceDate: serviceDateSchema,
+  startTime: startTimeSchema,
 })
 
 export const allowlistEntrySchema = z.object({
@@ -110,6 +122,7 @@ const FIELD_LABELS: Record<string, string> = {
   email: 'Email address',
   role: 'Role',
   serviceDate: 'Service date',
+  startTime: 'Service time',
 }
 
 export function friendlyValidationMessage(error: z.ZodError): string {

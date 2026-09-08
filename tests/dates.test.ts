@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { toServiceDate, formatServiceDate, nextSundayServiceDate, CHURCH_TIMEZONE } from '@/lib/dates'
+import {
+  toServiceDate,
+  formatServiceDate,
+  formatServiceTime,
+  nextSundayServiceDate,
+  CHURCH_TIMEZONE,
+} from '@/lib/dates'
 
 describe('toServiceDate', () => {
   it('uses the church timezone, not UTC', () => {
@@ -23,6 +29,38 @@ describe('toServiceDate', () => {
 describe('formatServiceDate', () => {
   it('renders a human-readable date without shifting the day', () => {
     expect(formatServiceDate('2026-08-09')).toBe('Sunday, August 9, 2026')
+  })
+})
+
+describe('formatServiceTime', () => {
+  it('renders a morning time', () => {
+    expect(formatServiceTime('09:30')).toBe('9:30 AM')
+  })
+
+  it('renders an afternoon time', () => {
+    expect(formatServiceTime('13:05')).toBe('1:05 PM')
+  })
+
+  it('renders midnight as 12:00 AM', () => {
+    expect(formatServiceTime('00:00')).toBe('12:00 AM')
+  })
+
+  it('renders noon as 12:00 PM', () => {
+    expect(formatServiceTime('12:00')).toBe('12:00 PM')
+  })
+
+  it('is identical regardless of the ambient TZ — pure string arithmetic, no Date construction', () => {
+    const original = process.env.TZ
+    try {
+      process.env.TZ = 'Pacific/Kiritimati' // UTC+14, about as far from America/New_York as it gets
+      const inExoticZone = formatServiceTime('09:30')
+      process.env.TZ = 'America/New_York'
+      const inChurchZone = formatServiceTime('09:30')
+      expect(inExoticZone).toBe(inChurchZone)
+      expect(inExoticZone).toBe('9:30 AM')
+    } finally {
+      process.env.TZ = original
+    }
   })
 })
 

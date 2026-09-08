@@ -14,6 +14,8 @@ import {
   moveCategorySchema,
   renameCategorySchema,
   updateCategorySchema,
+  startTimeSchema,
+  updateEventScheduleSchema,
 } from '@/lib/validation'
 
 describe('saveCountSchema', () => {
@@ -153,18 +155,70 @@ describe('createCategorySchema — countsTowardTotal', () => {
 
 describe('createEventSchema', () => {
   it('accepts a YYYY-MM-DD service date', () => {
-    const result = createEventSchema.parse({ name: 'Sunday Service - 9AM', serviceDate: '2026-08-09' })
+    const result = createEventSchema.parse({
+      name: 'Sunday Service - 9AM',
+      serviceDate: '2026-08-09',
+      startTime: '09:30',
+    })
     expect(result.serviceDate).toBe('2026-08-09')
   })
 
   it('rejects a timestamp masquerading as a service date', () => {
     expect(() =>
-      createEventSchema.parse({ name: 'Sunday', serviceDate: '2026-08-09T13:00:00Z' })
+      createEventSchema.parse({
+        name: 'Sunday',
+        serviceDate: '2026-08-09T13:00:00Z',
+        startTime: '09:30',
+      })
     ).toThrow()
   })
 
   it('rejects an impossible calendar date', () => {
-    expect(() => createEventSchema.parse({ name: 'Sunday', serviceDate: '2026-02-30' })).toThrow()
+    expect(() =>
+      createEventSchema.parse({ name: 'Sunday', serviceDate: '2026-02-30', startTime: '09:30' })
+    ).toThrow()
+  })
+
+  it('requires a start time', () => {
+    expect(() =>
+      createEventSchema.parse({ name: 'Sunday', serviceDate: '2026-08-09' })
+    ).toThrow()
+  })
+
+  it('reports a missing start time with the friendly sentence', () => {
+    const { error } = createEventSchema.safeParse({ name: 'Sunday', serviceDate: '2026-08-09' })
+    expect(friendlyValidationMessage(error!)).toBe('Service time is required.')
+  })
+})
+
+describe('startTimeSchema', () => {
+  it.each(['09:30', '00:00', '23:59'])('accepts %s', (value) => {
+    expect(startTimeSchema.parse(value)).toBe(value)
+  })
+
+  it.each(['9:30', '24:00', '12:60', '9:30 AM', ''])('rejects %s', (value) => {
+    expect(() => startTimeSchema.parse(value)).toThrow()
+  })
+
+  it('rejects a non-string', () => {
+    expect(() => startTimeSchema.parse(930)).toThrow()
+  })
+})
+
+describe('updateEventScheduleSchema', () => {
+  const valid = { id: 'clx0000000000000000000001', serviceDate: '2026-08-09', startTime: '11:00' }
+
+  it('accepts a valid id, date, and time', () => {
+    const result = updateEventScheduleSchema.parse(valid)
+    expect(result).toEqual(valid)
+  })
+
+  it('rejects a malformed time', () => {
+    expect(() => updateEventScheduleSchema.parse({ ...valid, startTime: '9:30' })).toThrow()
+  })
+
+  it('rejects a malformed date', () => {
+    expect(() => updateEventScheduleSchema.parse({ ...valid, serviceDate: '2026-02-30' })).toThrow()
   })
 })
 
@@ -265,7 +319,11 @@ describe('updateCategorySchema', () => {
 
 describe('friendlyValidationMessage — service date field label', () => {
   it('reports a bad service date using the "Service date" label, not the raw field name', () => {
-    const { error } = createEventSchema.safeParse({ name: 'Sunday', serviceDate: 'not-a-date' })
+    const { error } = createEventSchema.safeParse({
+      name: 'Sunday',
+      serviceDate: 'not-a-date',
+      startTime: '09:30',
+    })
     expect(friendlyValidationMessage(error!)).toBe('Service date is not valid.')
   })
 })
