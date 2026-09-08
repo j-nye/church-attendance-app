@@ -391,7 +391,7 @@ describe('getExportRows', () => {
           orderBy: [{ category: { sortOrder: 'asc' } }, { category: { name: 'asc' } }],
         },
       },
-      orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
+      orderBy: [{ serviceDate: 'asc' }, { startTime: 'asc' }, { name: 'asc' }],
     })
   })
 

@@ -22,7 +22,17 @@ type FetchStatus = 'idle' | 'loading' | 'loaded' | 'error'
  * violation (nested interactive content) and both links must keep working
  * as their own tap targets.
  */
-export function ServiceCard({ id, name, serviceDate }: { id: string; name: string; serviceDate: string }) {
+export function ServiceCard({
+  id,
+  name,
+  serviceDate,
+  serviceTime,
+}: {
+  id: string
+  name: string
+  serviceDate: string
+  serviceTime?: string
+}) {
   const [expanded, setExpanded] = useState(false)
   const [status, setStatus] = useState<FetchStatus>('idle')
   const [totals, setTotals] = useState<Totals | null>(null)
@@ -66,7 +76,10 @@ export function ServiceCard({ id, name, serviceDate }: { id: string; name: strin
       >
         <div>
           <strong>{name}</strong>
-          <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>{serviceDate}</div>
+          <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
+            {serviceDate}
+            {serviceTime ? ` · ${serviceTime}` : ''}
+          </div>
         </div>
         <div
           aria-hidden="true"

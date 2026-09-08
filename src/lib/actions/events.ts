@@ -6,23 +6,29 @@ import { ZodError } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, requireUser, AuthzError } from '@/lib/authz'
 import { isUniqueConstraintError } from '@/lib/prisma-errors'
-import { createEventSchema, serviceDateSchema, idSchema, friendlyValidationMessage } from '@/lib/validation'
-import { todayServiceDate, formatServiceDate } from '@/lib/dates'
+import {
+  createEventSchema,
+  serviceDateSchema,
+  updateEventScheduleSchema,
+  idSchema,
+  friendlyValidationMessage,
+} from '@/lib/validation'
+import { todayServiceDate, formatServiceDate, formatServiceTime } from '@/lib/dates'
 
 export async function listEvents() {
   await requireUser()
   return prisma.event.findMany({
     where: { isArchived: false },
-    orderBy: [{ serviceDate: 'desc' }, { name: 'asc' }],
+    orderBy: [{ serviceDate: 'desc' }, { startTime: 'asc' }, { name: 'asc' }],
     take: 50,
   })
 }
 
 export async function createEvent(input: unknown) {
   await requireAdmin()
-  const { name, serviceDate } = createEventSchema.parse(input)
+  const { name, serviceDate, startTime } = createEventSchema.parse(input)
 
-  const event = await prisma.event.create({ data: { name, serviceDate } })
+  const event = await prisma.event.create({ data: { name, serviceDate, startTime } })
   revalidatePath('/dashboard')
   revalidatePath('/settings')
   return event
@@ -39,33 +45,73 @@ export async function archiveEvent(input: unknown) {
 }
 
 /**
- * Volunteers can start counting even if no admin pre-created today's service.
- * Without this, a forgotten setup step blocks the entire Sunday.
+ * Today's non-archived services, in display/selection order. The dashboard
+ * uses this to decide which of the three UI states to render (zero / one /
+ * many) BEFORE ever calling getOrCreateTodayEvent — see that function's
+ * comment for why reaching its >1 case is exceptional rather than normal.
+ */
+export async function listTodayEvents() {
+  await requireUser()
+  const serviceDate = todayServiceDate()
+  return prisma.event.findMany({
+    where: { serviceDate, isArchived: false },
+    orderBy: { startTime: 'asc' },
+  })
+}
+
+/** Default start time stamped on an auto-created "today" service when no
+ * admin has set one up yet. Matches the backfill default for pre-existing
+ * rows (see the Task 1.1 migration). */
+const DEFAULT_SERVICE_START_TIME = '09:30'
+
+/**
+ * Volunteers can start counting even if no admin pre-created today's service
+ * — but ONLY when there is exactly zero or one service today. Without the
+ * zero-service path, a forgotten setup step blocks the entire Sunday.
+ *
+ * With two or more services today this THROWS rather than guessing. It used
+ * to silently pick one via `findFirst(orderBy: name)`, which could route a
+ * volunteer into the wrong service's entry screen — and because counts are
+ * upserted, silently overwrite that service's numbers. The dashboard now
+ * calls listTodayEvents() first and renders one button per service when
+ * there's more than one, so a caller only reaches this function's >1 branch
+ * via an exceptional path (e.g. a stale tab whose button was rendered before
+ * a second service existed, then tapped after). A loud throw is correct
+ * there — a discriminated union would just invite a caller to handle a case
+ * the UI is supposed to have already resolved.
  */
 export async function getOrCreateTodayEvent() {
   await requireUser()
   const serviceDate = todayServiceDate()
-  const name = `Service - ${formatServiceDate(serviceDate)}`
 
-  const existing = await prisma.event.findFirst({
+  const existing = await prisma.event.findMany({
     where: { serviceDate, isArchived: false },
-    orderBy: { name: 'asc' },
+    orderBy: { startTime: 'asc' },
   })
-  if (existing) return existing
+  if (existing.length > 1) {
+    throw new Error(
+      'Multiple services are scheduled today — choose one from the dashboard instead of guessing.'
+    )
+  }
+  if (existing.length === 1) return existing[0]
+
+  const startTime = DEFAULT_SERVICE_START_TIME
+  const name = `Service - ${formatServiceDate(serviceDate)} ${formatServiceTime(startTime)}`
 
   try {
-    const event = await prisma.event.create({ data: { name, serviceDate } })
+    const event = await prisma.event.create({ data: { name, serviceDate, startTime } })
     revalidatePath('/dashboard')
     return event
   } catch (error) {
-    // Two volunteers can both pass the findFirst check above and race to
-    // create — the compound [serviceDate, name] values are deterministic, so
-    // the loser's create fails with P2002, not a real conflict. Re-fetch and
-    // return the winner's row instead of surfacing an error page.
+    // Two volunteers can both pass the check above and race to create — the
+    // compound [serviceDate, name] values are deterministic, so the loser's
+    // create fails with P2002, not a real conflict. Re-fetch and return the
+    // winner's row instead of surfacing an error page. Ordered by startTime
+    // (not name) so the winner is deterministic under the new ordering.
     if (!isUniqueConstraintError(error)) throw error
     const winner = await prisma.event.findFirst({
       where: { serviceDate, isArchived: false },
-      orderBy: { name: 'asc' },
+      orderBy: { startTime: 'asc' },
     })
     if (!winner) throw error
     return winner
@@ -85,7 +131,7 @@ export async function listEventsInRange(start: string, end: string) {
 
   return prisma.event.findMany({
     where: { serviceDate: { gte: startDate, lte: endDate } },
-    orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
+    orderBy: [{ serviceDate: 'asc' }, { startTime: 'asc' }, { name: 'asc' }],
   })
 }
 
@@ -110,9 +156,42 @@ export async function unarchiveEvent(input: unknown) {
 export async function listRecentEvents() {
   await requireAdmin()
   return prisma.event.findMany({
-    orderBy: [{ serviceDate: 'desc' }, { name: 'asc' }],
+    orderBy: [{ serviceDate: 'desc' }, { startTime: 'asc' }, { name: 'asc' }],
     take: 50,
   })
+}
+
+/**
+ * Correct a service's date and time after creation — someone will pick the
+ * wrong one, and a service mis-dated by a week needs to be moved rather than
+ * recreated (recreating would orphan any counts already entered against it).
+ *
+ * Date and time move together in one write, so a service can never be left
+ * half-moved. The service NAME stays immutable: it is the other half of
+ * @@unique([serviceDate, name]) and the key getOrCreateTodayEvent's race
+ * recovery re-finds its winner by.
+ *
+ * Deliberately imposes no "not in the past" rule — correcting a past
+ * service's date is the whole reason this exists.
+ */
+export async function updateEventSchedule(input: unknown) {
+  await requireAdmin()
+  const { id, serviceDate, startTime } = updateEventScheduleSchema.parse(input)
+
+  const existing = await prisma.event.findUnique({ where: { id } })
+  if (!existing) throw new Error('No such service')
+  // Same promise the archive confirmation dialog already makes: an archived
+  // service stops accepting counts AND edits. Unarchive first.
+  if (existing.isArchived) throw new Error('That service is not accepting counts')
+
+  await prisma.event.update({ where: { id }, data: { serviceDate, startTime } })
+  revalidatePath('/dashboard')
+  revalidatePath('/settings')
+  revalidatePath(`/entry/${id}`)
+  revalidatePath(`/report/${id}`)
+  // The manage page renders the service date in its own header — deleteCount
+  // already revalidates this path for the same reason.
+  revalidatePath(`/report/${id}/manage`)
 }
 
 export type EventFormState = { ok: boolean; message?: string }
@@ -131,6 +210,37 @@ export async function createEventAction(
     await createEvent({
       name: formData.get('name'),
       serviceDate: formData.get('serviceDate'),
+      startTime: formData.get('startTime'),
+    })
+  } catch (error) {
+    if (error instanceof AuthzError) {
+      return { ok: false, message: 'You are not authorized to do that.' }
+    }
+    if (error instanceof ZodError) {
+      return { ok: false, message: friendlyValidationMessage(error) }
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return { ok: false, message: 'A service with that name already exists on that date.' }
+    }
+    throw error
+  }
+  return { ok: true }
+}
+
+/**
+ * useActionState-compatible wrapper around updateEventSchedule() — same
+ * error ladder as createEventAction. Moving a date is exactly as
+ * collision-prone as creating one, so the P2002 branch is not optional here.
+ */
+export async function updateEventScheduleAction(
+  _prevState: EventFormState,
+  formData: FormData
+): Promise<EventFormState> {
+  try {
+    await updateEventSchedule({
+      id: formData.get('id'),
+      serviceDate: formData.get('serviceDate'),
+      startTime: formData.get('startTime'),
     })
   } catch (error) {
     if (error instanceof AuthzError) {

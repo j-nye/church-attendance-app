@@ -131,7 +131,7 @@ export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
           orderBy: [{ category: { sortOrder: 'asc' } }, { category: { name: 'asc' } }],
         },
       },
-      orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
+      orderBy: [{ serviceDate: 'asc' }, { startTime: 'asc' }, { name: 'asc' }],
     }),
     prisma.serviceSpeaker.findMany({
       where: { eventId: { in: eventIds } },

@@ -7,6 +7,7 @@ const revalidatePath = vi.fn()
 
 const eventFindMany = vi.fn()
 const eventFindFirst = vi.fn()
+const eventFindUnique = vi.fn()
 const eventCreate = vi.fn()
 const eventUpdate = vi.fn()
 
@@ -27,6 +28,7 @@ vi.mock('@/lib/prisma', () => ({
     event: {
       findMany: (...args: unknown[]) => eventFindMany(...args),
       findFirst: (...args: unknown[]) => eventFindFirst(...args),
+      findUnique: (...args: unknown[]) => eventFindUnique(...args),
       create: (...args: unknown[]) => eventCreate(...args),
       update: (...args: unknown[]) => eventUpdate(...args),
     },
@@ -51,6 +53,9 @@ const {
   unarchiveEvent,
   listRecentEvents,
   createEventAction,
+  listTodayEvents,
+  updateEventSchedule,
+  updateEventScheduleAction,
 } = await import('@/lib/actions/events')
 
 beforeEach(() => {
@@ -59,6 +64,7 @@ beforeEach(() => {
   revalidatePath.mockReset()
   eventFindMany.mockReset()
   eventFindFirst.mockReset()
+  eventFindUnique.mockReset()
   eventCreate.mockReset()
   eventUpdate.mockReset()
 })
@@ -77,7 +83,7 @@ describe('listEvents', () => {
     expect(result).toEqual([{ id: '1' }])
     expect(eventFindMany).toHaveBeenCalledWith({
       where: { isArchived: false },
-      orderBy: [{ serviceDate: 'desc' }, { name: 'asc' }],
+      orderBy: [{ serviceDate: 'desc' }, { startTime: 'asc' }, { name: 'asc' }],
       take: 50,
     })
   })
@@ -86,28 +92,50 @@ describe('listEvents', () => {
 describe('createEvent', () => {
   it('rejects a non-admin before touching validation or the database', async () => {
     requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
-    await expect(createEvent({ name: 'Bad', serviceDate: 'not-a-date' })).rejects.toThrow(
-      AuthzError
-    )
+    await expect(
+      createEvent({ name: 'Bad', serviceDate: 'not-a-date', startTime: '09:30' })
+    ).rejects.toThrow(AuthzError)
     expect(eventCreate).not.toHaveBeenCalled()
   })
 
   it('rejects invalid input even for an admin', async () => {
     requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
-    await expect(createEvent({ name: '', serviceDate: 'not-a-date' })).rejects.toThrow()
+    await expect(
+      createEvent({ name: '', serviceDate: 'not-a-date', startTime: '09:30' })
+    ).rejects.toThrow()
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('rejects input with no startTime', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    await expect(createEvent({ name: 'Sunday', serviceDate: '2026-08-09' })).rejects.toThrow()
     expect(eventCreate).not.toHaveBeenCalled()
   })
 
   it('creates the event and revalidates for valid admin input', async () => {
     requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
-    eventCreate.mockResolvedValue({ id: '1', name: 'Sunday', serviceDate: '2026-08-09' })
-    const result = await createEvent({ name: 'Sunday', serviceDate: '2026-08-09' })
+    eventCreate.mockResolvedValue({
+      id: '1',
+      name: 'Sunday',
+      serviceDate: '2026-08-09',
+      startTime: '09:30',
+    })
+    const result = await createEvent({
+      name: 'Sunday',
+      serviceDate: '2026-08-09',
+      startTime: '09:30',
+    })
     expect(eventCreate).toHaveBeenCalledWith({
-      data: { name: 'Sunday', serviceDate: '2026-08-09' },
+      data: { name: 'Sunday', serviceDate: '2026-08-09', startTime: '09:30' },
     })
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
     expect(revalidatePath).toHaveBeenCalledWith('/settings')
-    expect(result).toEqual({ id: '1', name: 'Sunday', serviceDate: '2026-08-09' })
+    expect(result).toEqual({
+      id: '1',
+      name: 'Sunday',
+      serviceDate: '2026-08-09',
+      startTime: '09:30',
+    })
   })
 })
 
@@ -134,37 +162,64 @@ describe('archiveEvent', () => {
   })
 })
 
+describe('listTodayEvents', () => {
+  it('requires a signed-in user', async () => {
+    requireUser.mockRejectedValue(new AuthzError('UNAUTHENTICATED'))
+    await expect(listTodayEvents()).rejects.toThrow(AuthzError)
+    expect(eventFindMany).not.toHaveBeenCalled()
+  })
+
+  it("returns today's non-archived events ordered by startTime ascending", async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindMany.mockResolvedValue([{ id: 'e1', startTime: '09:30' }])
+    const result = await listTodayEvents()
+    expect(result).toEqual([{ id: 'e1', startTime: '09:30' }])
+    expect(eventFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { startTime: 'asc' } })
+    )
+  })
+})
+
 describe('getOrCreateTodayEvent', () => {
   it('requires a signed-in user', async () => {
     requireUser.mockRejectedValue(new AuthzError('UNAUTHENTICATED'))
     await expect(getOrCreateTodayEvent()).rejects.toThrow(AuthzError)
-    expect(eventFindFirst).not.toHaveBeenCalled()
+    expect(eventFindMany).not.toHaveBeenCalled()
     expect(eventCreate).not.toHaveBeenCalled()
   })
 
-  it('returns the existing event for today without creating one', async () => {
+  it('returns the existing event for today without creating one when exactly one exists', async () => {
     requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
-    eventFindFirst.mockResolvedValue({ id: 'existing' })
+    eventFindMany.mockResolvedValue([{ id: 'existing' }])
     const result = await getOrCreateTodayEvent()
     expect(result).toEqual({ id: 'existing' })
     expect(eventCreate).not.toHaveBeenCalled()
   })
 
-  it('creates a new event for today when none exists', async () => {
+  it('creates a new event for today, stamped with the default startTime, when none exists', async () => {
     requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
-    eventFindFirst.mockResolvedValue(null)
+    eventFindMany.mockResolvedValue([])
     eventCreate.mockResolvedValue({ id: 'new' })
     const result = await getOrCreateTodayEvent()
     expect(result).toEqual({ id: 'new' })
-    expect(eventCreate).toHaveBeenCalled()
+    expect(eventCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ startTime: '09:30' }),
+    })
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('throws before ever calling create when today already has more than one service', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindMany.mockResolvedValue([{ id: 'e1' }, { id: 'e2' }])
+
+    await expect(getOrCreateTodayEvent()).rejects.toThrow()
+    expect(eventCreate).not.toHaveBeenCalled()
   })
 
   it('re-fetches and returns the winner\'s row when create loses a concurrent-tap race (P2002)', async () => {
     requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
-    eventFindFirst
-      .mockResolvedValueOnce(null) // initial check finds nothing
-      .mockResolvedValueOnce({ id: 'winner' }) // refetch after losing the create race
+    eventFindMany.mockResolvedValue([]) // initial check finds nothing
+    eventFindFirst.mockResolvedValue({ id: 'winner' }) // refetch after losing the create race
     eventCreate.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
         code: 'P2002',
@@ -176,12 +231,14 @@ describe('getOrCreateTodayEvent', () => {
     const result = await getOrCreateTodayEvent()
 
     expect(result).toEqual({ id: 'winner' })
-    expect(eventFindFirst).toHaveBeenCalledTimes(2)
+    expect(eventFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { startTime: 'asc' } })
+    )
   })
 
   it('still throws a non-P2002 error from create', async () => {
     requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
-    eventFindFirst.mockResolvedValue(null)
+    eventFindMany.mockResolvedValue([])
     eventCreate.mockRejectedValue(new Error('connection reset'))
 
     await expect(getOrCreateTodayEvent()).rejects.toThrow('connection reset')
@@ -209,14 +266,14 @@ describe('listEventsInRange', () => {
     expect(eventFindMany).not.toHaveBeenCalled()
   })
 
-  it('queries events with serviceDate between start and end, inclusive, ordered by date then name', async () => {
+  it('queries events with serviceDate between start and end, inclusive, ordered by date then startTime then name', async () => {
     requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
     eventFindMany.mockResolvedValue([{ id: 'e1' }])
     const result = await listEventsInRange('2026-08-01', '2026-08-31')
     expect(result).toEqual([{ id: 'e1' }])
     expect(eventFindMany).toHaveBeenCalledWith({
       where: { serviceDate: { gte: '2026-08-01', lte: '2026-08-31' } },
-      orderBy: [{ serviceDate: 'asc' }, { name: 'asc' }],
+      orderBy: [{ serviceDate: 'asc' }, { startTime: 'asc' }, { name: 'asc' }],
     })
   })
 
@@ -264,7 +321,7 @@ describe('listRecentEvents', () => {
     const result = await listRecentEvents()
     expect(result).toEqual([{ id: '1', isArchived: true }])
     expect(eventFindMany).toHaveBeenCalledWith({
-      orderBy: [{ serviceDate: 'desc' }, { name: 'asc' }],
+      orderBy: [{ serviceDate: 'desc' }, { startTime: 'asc' }, { name: 'asc' }],
       take: 50,
     })
   })
@@ -283,17 +340,34 @@ describe('createEventAction', () => {
 
     const result = await createEventAction(
       { ok: true },
-      eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06' })
+      eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06', startTime: '09:30' })
     )
 
     expect(result).toEqual({ ok: true })
-    expect(eventCreate).toHaveBeenCalledWith({ data: { name: 'Sunday Service', serviceDate: '2026-09-06' } })
+    expect(eventCreate).toHaveBeenCalledWith({
+      data: { name: 'Sunday Service', serviceDate: '2026-09-06', startTime: '09:30' },
+    })
+  })
+
+  it('returns { ok: false } with the field label for a missing startTime', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+
+    const result = await createEventAction(
+      { ok: true },
+      eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'Service time is required.' })
+    expect(eventCreate).not.toHaveBeenCalled()
   })
 
   it('returns a friendly inline message instead of throwing for a blank name', async () => {
     requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
 
-    const result = await createEventAction({ ok: true }, eventFormData({ name: '', serviceDate: '2026-09-06' }))
+    const result = await createEventAction(
+      { ok: true },
+      eventFormData({ name: '', serviceDate: '2026-09-06', startTime: '09:30' })
+    )
 
     expect(result).toEqual({ ok: false, message: 'Name is required.' })
     expect(eventCreate).not.toHaveBeenCalled()
@@ -311,7 +385,7 @@ describe('createEventAction', () => {
 
     const result = await createEventAction(
       { ok: true },
-      eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06' })
+      eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06', startTime: '09:30' })
     )
 
     expect(result).toEqual({ ok: false, message: 'A service with that name already exists on that date.' })
@@ -322,7 +396,7 @@ describe('createEventAction', () => {
 
     const result = await createEventAction(
       { ok: true },
-      eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06' })
+      eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06', startTime: '09:30' })
     )
 
     expect(result).toEqual({ ok: false, message: 'You are not authorized to do that.' })
@@ -334,7 +408,186 @@ describe('createEventAction', () => {
     eventCreate.mockRejectedValue(new Error('connection reset'))
 
     await expect(
-      createEventAction({ ok: true }, eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06' }))
+      createEventAction(
+        { ok: true },
+        eventFormData({ name: 'Sunday Service', serviceDate: '2026-09-06', startTime: '09:30' })
+      )
+    ).rejects.toThrow('connection reset')
+  })
+})
+
+describe('updateEventSchedule', () => {
+  it('rejects a non-admin before touching validation or the database', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(
+      updateEventSchedule({ id: 'id1', serviceDate: '2026-09-06', startTime: '09:30' })
+    ).rejects.toThrow(AuthzError)
+    expect(eventFindUnique).not.toHaveBeenCalled()
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed time', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    await expect(
+      updateEventSchedule({ id: 'id1', serviceDate: '2026-09-06', startTime: '9:30 AM' })
+    ).rejects.toThrow()
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed date', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    await expect(
+      updateEventSchedule({ id: 'id1', serviceDate: '2026-02-30', startTime: '09:30' })
+    ).rejects.toThrow()
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('updates serviceDate and startTime together in a single write', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: false })
+
+    await updateEventSchedule({ id: 'id1', serviceDate: '2026-09-13', startTime: '11:00' })
+
+    expect(eventUpdate).toHaveBeenCalledTimes(1)
+    expect(eventUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { serviceDate: '2026-09-13', startTime: '11:00' },
+    })
+  })
+
+  it('moves a service to a past date without complaint — there is no "not in the past" rule', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: false })
+
+    await expect(
+      updateEventSchedule({ id: 'id1', serviceDate: '2000-01-02', startTime: '09:30' })
+    ).resolves.toBeUndefined()
+    expect(eventUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { serviceDate: '2000-01-02', startTime: '09:30' },
+    })
+  })
+
+  it('returns the friendly collision message via P2002, not a raw Prisma error', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: false })
+    eventUpdate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['serviceDate', 'name'] },
+      })
+    )
+
+    await expect(
+      updateEventSchedule({ id: 'id1', serviceDate: '2026-09-13', startTime: '11:00' })
+    ).rejects.toMatchObject({ code: 'P2002' })
+  })
+
+  it('refuses to edit an archived service', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: true })
+
+    await expect(
+      updateEventSchedule({ id: 'id1', serviceDate: '2026-09-13', startTime: '11:00' })
+    ).rejects.toThrow('That service is not accepting counts')
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('errors cleanly for a nonexistent id instead of surfacing a raw P2025', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindUnique.mockResolvedValue(null)
+
+    await expect(
+      updateEventSchedule({ id: 'missing', serviceDate: '2026-09-13', startTime: '11:00' })
+    ).rejects.toThrow('No such service')
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('revalidates dashboard, settings, entry, report, and the manage page', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: false })
+
+    await updateEventSchedule({ id: 'id1', serviceDate: '2026-09-13', startTime: '11:00' })
+
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/id1')
+    expect(revalidatePath).toHaveBeenCalledWith('/report/id1')
+    expect(revalidatePath).toHaveBeenCalledWith('/report/id1/manage')
+  })
+})
+
+describe('updateEventScheduleAction', () => {
+  it('returns { ok: true } and updates the schedule for valid input', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: false })
+
+    const result = await updateEventScheduleAction(
+      { ok: true },
+      eventFormData({ id: 'id1', serviceDate: '2026-09-13', startTime: '11:00' })
+    )
+
+    expect(result).toEqual({ ok: true })
+    expect(eventUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { serviceDate: '2026-09-13', startTime: '11:00' },
+    })
+  })
+
+  it('returns a friendly inline message for a malformed time instead of throwing', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+
+    const result = await updateEventScheduleAction(
+      { ok: true },
+      eventFormData({ id: 'id1', serviceDate: '2026-09-13', startTime: '11:00 AM' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'Service time is not valid.' })
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('returns a friendly inline message for a duplicate [serviceDate, name] instead of crashing', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: false })
+    eventUpdate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['serviceDate', 'name'] },
+      })
+    )
+
+    const result = await updateEventScheduleAction(
+      { ok: true },
+      eventFormData({ id: 'id1', serviceDate: '2026-09-13', startTime: '11:00' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'A service with that name already exists on that date.' })
+  })
+
+  it('returns a friendly inline message when the session is no longer an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+
+    const result = await updateEventScheduleAction(
+      { ok: true },
+      eventFormData({ id: 'id1', serviceDate: '2026-09-13', startTime: '11:00' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'You are not authorized to do that.' })
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rethrows an unexpected error so the app error boundary still catches it', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: false })
+    eventUpdate.mockRejectedValue(new Error('connection reset'))
+
+    await expect(
+      updateEventScheduleAction(
+        { ok: true },
+        eventFormData({ id: 'id1', serviceDate: '2026-09-13', startTime: '11:00' })
+      )
     ).rejects.toThrow('connection reset')
   })
 })
