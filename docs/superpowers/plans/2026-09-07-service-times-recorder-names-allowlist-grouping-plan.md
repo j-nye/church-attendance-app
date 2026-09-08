@@ -217,7 +217,7 @@ This is the highest-value task in the plan. Today, `getOrCreateTodayEvent()` doe
 
 - `listTodayEvents()` returns all of today's non-archived services ordered by `startTime`.
 - `getOrCreateTodayEvent()` still creates-and-returns when today has **zero** services (the "no admin set it up" path this function exists for must not regress), stamping the new row with a documented default `startTime` of `'09:30'` and a name that includes the time.
-- `getOrCreateTodayEvent()` **throws** (or returns a discriminated `{ ambiguous: true, events }`) when today has more than one service — it must never guess. Pick one shape and assert it.
+- `getOrCreateTodayEvent()` **throws** when today has more than one service — it must never guess. This is now settled rather than an open choice: the dashboard branches on `listTodayEvents()` *before* deciding whether to call this function at all, so reaching it in the >1 state means something exceptional happened — a stale browser tab whose button was rendered before a second service existed, then clicked after. A throw halts that race loudly; a discriminated union would invite a caller to handle a case the UI is supposed to have already resolved. Assert the throw, and assert it happens before any `create`.
 - The existing P2002 race-recovery test still passes.
 
 - [ ] **Step 2 (GREEN): Implement**
@@ -369,7 +369,14 @@ Without that branch, an email-shaped fallback reaches every volunteer through th
 
 Leave the existing `recordedBy: user.role === 'ADMIN' ? ... : undefined` line **exactly as it is** and update the surrounding doc comment to state the new split precisely: names for everyone, raw emails for admins only.
 
-Also return a service-level `recordedByNames: string[]` — the distinct recorders for the whole event, in first-recorded order. The feedback asks who entered information "into each service", which is a per-service question, not only a per-row one.
+Also return a service-level `recordedByNames: string[]` — the recorders for the whole event, in first-recorded order. The feedback asks who entered information "into each service", which is a per-service question, not only a per-row one.
+
+**Specify the de-duplication, in two stages** — the plan previously said only "distinct", which does not determine the outcome:
+
+1. Dedupe by **email** first, since that is the identity. Two counts entered by the same person yield one entry.
+2. Then resolve to display strings and **collapse duplicate strings**. Without this, three recorders with no resolvable name render as `Unknown, Unknown, Unknown`.
+
+Consequence to accept deliberately: the rendered list is a set of *names*, not a headcount of recorders. Two different people who share a display name — or two unresolvable people — appear once. That is the right trade, because a reader cannot tell two identical strings apart anyway, but it means nothing downstream may treat `recordedByNames.length` as a number of people. Assert both stages: a same-email-twice case yields one entry, and a two-unknown-recorders case yields exactly one `'Unknown'`.
 
 - [ ] **Step 3: Render it**
 
@@ -470,7 +477,7 @@ These are **not** optional cleanups. Each one is an existing assertion that will
 - `npm run lint && npm test && npx tsc --noEmit` green after every task. "Green" means the regression inventory above has been worked through — a suite that passes because a fixture was loosened is not green.
 - **Run the real-database tests, not just the mocked ones.** Most of this suite mocks Prisma; `tests/prisma-schema.test.ts` and `tests/auth.test.ts` do not, and Task 1.1's NOT NULL column is invisible to every mocked test in the project.
 - `npm run security:sast` before opening a PR.
-- Add one Playwright assertion to `e2e/counting-flow.spec.ts` covering the two-services-on-one-date path: create two services at different times, confirm the dashboard offers a choice rather than auto-redirecting, and confirm counts entered into one do not appear in the other. This is the regression that Task 1.4 exists to prevent, and it is exactly the kind of high-risk flow AGENTS.md says to e2e. Use `npm run test:e2e:local` (disposable Docker Postgres) — a bare `npm run test:e2e` writes fixtures into the real Neon dev database.
+- Add one Playwright assertion to `e2e/counting-flow.spec.ts` covering the two-services-on-one-date path: create two services at different times, confirm the dashboard renders a time-labelled button per service and no longer renders the single "Start counting today's service" button, confirm clicking one lands on that service's `/entry/[id]`, and — **the assertion that actually matters** — confirm counts entered into one service do **not** appear on the other's report. Asserting only the UI rendering would pass even if both buttons routed to the same event, which is the exact bug Task 1.4 exists to prevent. This is the regression that Task 1.4 exists to prevent, and it is exactly the kind of high-risk flow AGENTS.md says to e2e. Use `npm run test:e2e:local` (disposable Docker Postgres) — a bare `npm run test:e2e` writes fixtures into the real Neon dev database.
 
 ### Manual checklist (owner)
 - [ ] Create two services on the same date at 9:30 AM and 11:00 AM; confirm they list in time order, not alphabetical.
