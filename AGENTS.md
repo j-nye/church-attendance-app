@@ -197,12 +197,29 @@ session.user.name   // optional (not used here)
 
 ## Testing
 
-- **Unit tests:** 17 specs in Vitest — fast, run first
-- **E2E tests:** 2 specs in Playwright against next-auth — auth surface plus the counting flow
+- **Unit tests:** 18 files / ~284 specs in Vitest — fast, run first
+- **E2E tests:** 3 specs in Playwright against next-auth — auth surface, cross-role authorization, and the counting flow
 
 **The gap:** Counting logic (saveCount, getEventCounts) has only unit tests. E2E coverage is thin.
 
 **Running e2e locally uses a disposable database, not the real dev DB.** `.env.local` (and direnv's Doppler export in `.envrc`) point at the real Neon dev database — bare `npm run test:e2e` will write test fixtures (seeded allowlist rows, a real Event) into whatever database is currently active in your shell. Use `npm run test:e2e:local` instead: it starts a throwaway `postgres:16` Docker container (matching CI's service container, per the project's existing decision to use disposable Postgres rather than a Neon branch — see `docs/superpowers/plans/2026-08-31-roadmap.md`), and overrides `DATABASE_URL`/`DIRECT_URL`/`AUTH_SECRET` only in the spawned processes' env — never in a `.env` file, since a file-based override would be silently beaten by whatever direnv already exported into the shell. Requires Docker. `npm run db:test:down` stops the container when you're done.
+
+### Tests are not optional — for new features AND for changes to existing ones
+
+**Every behavior change ships with its tests in the same change.** Not in a follow-up, not "once it works". This applies equally to new features and to modifications of existing behavior — a change to working code is exactly where a silent regression hides.
+
+**New behavior — write the test first.** Add a failing test that encodes the new rule, then make it pass. Put it in the existing file that covers that module (`tests/actions-events.test.ts` for event actions, `tests/validation.test.ts` for schemas, and so on) — do not create a parallel test file for a module that already has one.
+
+**Changed behavior — find what you broke before you run the suite.** Before editing, grep the tests for the function, schema, or column you're about to change and read what they assert. Then, when something goes red:
+
+- **A contract changed** → rewrite the test to encode the *new* contract. Keep the coverage.
+- **Only a fixture is stale** (a newly-required field is missing) → add the field and leave the assertion alone.
+- **Never** loosen or delete a strict assertion to get to green. A dropped `toHaveBeenCalledWith`, a deleted case, or a widened matcher is a silently removed guarantee. If a test seems to be "in the way", assume the implementation is wrong until proven otherwise — especially for the authorization and session-derivation tests, which exist precisely to fail when someone weakens them.
+- **Watch for tests that pass for the wrong reason.** Adding a required field to a schema can make an unrelated test green via a different code path than the one it was written to check. Green is not the goal; green *for the stated reason* is.
+
+**Run the real-database tests, not just the mocked ones.** Most of the suite mocks Prisma. `tests/prisma-schema.test.ts` and `tests/auth.test.ts` hit a real database, so a schema change — a new NOT NULL column especially — can leave every mocked test green while CI goes red. A migration is a behavior change and needs its fixtures updated like any other.
+
+**Also update, when the behavior they describe changes:** the test's own name (a stale name teaches the next reader the wrong invariant), and any e2e selector that matches on user-visible text you just relabeled.
 
 **When writing tests:**
 - Unit: test Zod schemas, business logic, Prisma queries with mocks
@@ -280,5 +297,8 @@ src/
 - [ ] Check `isArchived` and `isActive` before mutations
 - [ ] Validate input with Zod — don't trust what comes in
 - [ ] Call `revalidatePath()` after mutations
-- [ ] Run `npm run lint && npm run test` — both must pass
+- [ ] Every behavior you added or changed has a test that fails without your change
+- [ ] You grepped the existing tests for what you touched, and updated them by rewriting to the new contract — not by loosening assertions
+- [ ] Run `npm run lint && npm run test && npx tsc --noEmit` — all three must pass
+- [ ] If your change touched the schema, the real-database tests (`tests/prisma-schema.test.ts`, `tests/auth.test.ts`) ran and passed — mocked tests can't see a migration
 - [ ] If you touch auth or counts, write an e2e test
