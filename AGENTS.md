@@ -290,6 +290,42 @@ src/
 
 ---
 
+## Deployment: Verify in Development Before Production
+
+**No application change reaches production without first running in the development environment.** Not a schema change, not a behavior change, not a "small" fix. This is a release rule, not a preference.
+
+### What the environments actually are
+
+| Environment | Database | Doppler config | Triggered by |
+|---|---|---|---|
+| Local dev | Neon `church-attendance-app-dev` | `dev` (via direnv) | `npm run dev` |
+| E2E | Disposable Docker Postgres | n/a (spawn-time override) | `npm run test:e2e:local` |
+| Vercel Preview | Neon `church-attendance-app-dev` | `dev` | pushing any non-`main` branch |
+| Vercel Production | Neon `church-attendance-app-prd` | `prd` | **merging to `main`** |
+
+Merging to `main` deploys to production. There is no separate promotion step, so the branch *is* the gate.
+
+### The required sequence
+
+1. **Local** — `npm run lint && npm test && npx tsc --noEmit`, plus `npm run security:sast`.
+2. **Real database** — if the change touches the schema, run the migration against the Neon dev database and confirm `tests/prisma-schema.test.ts` and `tests/auth.test.ts` pass. Mocked tests cannot see a migration.
+3. **E2E** — `npm run test:e2e:local` (disposable Postgres; never bare `npm run test:e2e`, which writes fixtures into whatever database your shell currently points at).
+4. **Preview deploy** — push the branch and exercise the change in the resulting Vercel Preview, which runs against the dev database.
+5. **Manual pass** — click through the actual changed flows in Preview, not just locally. Reports get printed; counts get entered on phones.
+6. **Only then** merge to `main`.
+
+### Why the Preview step is not optional
+
+Vercel's Build Command is `npx prisma migrate deploy && next build`. Migrations therefore run **during the build, while the previous deployment is still serving traffic** — so a migration and the code that depends on it are never live at the same instant. Preview is the only place that sequence gets rehearsed before it runs against production data.
+
+This is exactly why a migration that adds a `NOT NULL` column keeps its database default through the rollout and drops it in a later, separate migration: during the build window, the old code is still inserting rows without the new field. Expand in one release, contract in the next.
+
+### Production is not a test environment
+
+If something can only be verified in production, that is a gap to close, not a reason to skip ahead. Neon's backup retention on the production project is a documented, accepted risk — not a rollback plan (see `docs/superpowers/plans/2026-08-31-roadmap.md`).
+
+---
+
 ## Before Submitting
 
 - [ ] Read the schema comments — they encode business rules
@@ -302,3 +338,4 @@ src/
 - [ ] Run `npm run lint && npm run test && npx tsc --noEmit` — all three must pass
 - [ ] If your change touched the schema, the real-database tests (`tests/prisma-schema.test.ts`, `tests/auth.test.ts`) ran and passed — mocked tests can't see a migration
 - [ ] If you touch auth or counts, write an e2e test
+- [ ] Verified in the development environment — local suite, then a Vercel Preview deploy against the dev database — **before** anything merges to `main` and ships to production
