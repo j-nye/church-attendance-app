@@ -83,9 +83,16 @@ Keep the existing `@@unique([serviceDate, name])` and `@@index([serviceDate])`.
 
 ```sql
 ALTER TABLE "Event" ADD COLUMN "startTime" TEXT NOT NULL DEFAULT '09:30';
-ALTER TABLE "Event" ALTER COLUMN "startTime" DROP DEFAULT;
 CREATE INDEX "Event_serviceDate_startTime_idx" ON "Event"("serviceDate", "startTime");
 ```
+
+**Do NOT add `ALTER COLUMN "startTime" DROP DEFAULT` to this migration.** Vercel's Build Command is `npx prisma migrate deploy && next build` (see `docs/superpowers/plans/2026-08-31-deploy-checklist.md`), so the migration runs *during the build*, while the **previous** deployment is still serving traffic. Between the migration completing and the new build cutting over, the old code is live against the new column — and the old `getOrCreateTodayEvent`/`createEvent` insert an `Event` with no `startTime`. Without a database default that insert is a NOT NULL violation: a volunteer tapping "Start counting today's service" during the build window gets an error page. The default is what keeps the old code working for those few minutes.
+
+The requirement is still enforced in application code: `startTime` is declared **without** `@default` in `schema.prisma`, so Prisma's generated create types make it mandatory. Database default for the rollout window, type-level requirement for the code — the guarantees do not overlap and both are wanted.
+
+- [ ] **Step 2a: Plan the follow-up contract migration**
+
+Because the schema declares no `@default` while the database has one, the next `prisma migrate dev` will notice and try to fold a `DROP DEFAULT` into whatever unrelated migration you are generating at the time. Don't let it land by accident: once this release is deployed and confirmed live, add a deliberate one-line migration that drops the default, and note it in the deploy checklist. Standard expand/contract — expand now, contract after the rollout.
 
 - [ ] **Step 3: Apply it and confirm**
 
@@ -149,7 +156,7 @@ In `src/lib/dates.ts`, add `formatServiceTime()` as pure string arithmetic — s
 - A date change that collides with an existing `(serviceDate, name)` returns the friendly `'A service with that name already exists on that date.'` — the same sentence `createEventAction` uses — not a raw P2002.
 - It **refuses an archived service** with `'That service is not accepting counts'`, matching the promise the archive dialog already makes to the user.
 - A nonexistent id surfaces a clean error, not a raw P2025.
-- It revalidates `/dashboard`, `/settings`, `/entry/<id>`, and `/report/<id>`.
+- It revalidates `/dashboard`, `/settings`, `/entry/<id>`, `/report/<id>`, **and `/report/<id>/manage`** — that page renders the service date in its own header, and `deleteCount` already revalidates it for the same reason.
 
 - [ ] **Step 2 (GREEN): Implement**
 
@@ -186,6 +193,9 @@ export async function updateEventSchedule(input: unknown) {
   revalidatePath('/settings')
   revalidatePath(`/entry/${id}`)
   revalidatePath(`/report/${id}`)
+  // The manage page renders the service date in its own header — deleteCount
+  // already revalidates this path for the same reason.
+  revalidatePath(`/report/${id}/manage`)
 }
 ```
 
@@ -254,14 +264,20 @@ Per this project's established convention, UI-wiring steps get no new automated 
 - [ ] **Step 1:** Add to the `Allowlist` model:
 
 ```prisma
-  /// Display name for attribution ("Recorded by Jane Smith"). Captured from the
-  /// Google profile on sign-in and overridable by an admin. Optional: someone
-  /// allowlisted who has never signed in has no name, and every display path
-  /// falls back to the email address.
-  name      String?
+  /// The name Google reports for this person. Re-synced on EVERY sign-in, so a
+  /// legitimate name change (marriage, correction) propagates on next login.
+  /// Null until their first sign-in.
+  name              String?
+  /// An admin's manual correction, which always wins over `name`. Kept in its
+  /// own column precisely so the two sources stay distinguishable: with a
+  /// single column there is no way to tell "an admin corrected this" from
+  /// "Google changed this", which forces a choice between clobbering the
+  /// correction every Sunday and freezing the Google name forever.
+  /// Display resolves as `adminOverrideName ?? name`.
+  adminOverrideName String?
 ```
 
-- [ ] **Step 2:** `prisma migrate dev --name add_allowlist_name`. Nullable, so no backfill is needed. Existing rows show as emails until their owner next signs in.
+- [ ] **Step 2:** `prisma migrate dev --name add_allowlist_name`. Both nullable, so no backfill is needed. Existing rows show as emails until their owner next signs in.
 
 ### Task 2.2: Capture the name at sign-in
 
@@ -270,21 +286,27 @@ Per this project's established convention, UI-wiring steps get no new automated 
 - [ ] **Step 1 (RED): Tests against `signInCallback` directly** (the module is deliberately structured for this):
   - A successful sign-in with `profile.name` writes that name onto the allowlist row.
   - A sign-in whose stored name already matches writes nothing (no pointless update).
-  - A profile with **no** name leaves an existing stored name untouched — Google not returning a name must never blank out a good value, including an admin's override.
-  - **An admin override is not clobbered on next sign-in.** This is the important one; see Step 2.
+  - A profile with **no** name leaves an existing stored name untouched — Google not returning a name must never blank out a good value.
+  - A sign-in with a **changed** Google name updates `name` (no one-way latch — a legitimate name change must propagate).
+  - **`adminOverrideName` is never written by the sign-in path at all.** Assert it is untouched across a sign-in whose Google name differs — this is the guarantee the two-column design exists to provide.
   - The allowlist gate itself is unchanged: a non-allowlisted or inactive email still returns `false`, and no name is written for a rejected sign-in.
 
 - [ ] **Step 2 (GREEN): Implement, and decide the override rule explicitly**
 
-Extend the existing `googleSub` binding block in `signInCallback` to also persist `profile.name`. To keep an admin's correction from being overwritten every Sunday, **only write the Google name when the stored `name` is null**:
+Extend the existing `googleSub` binding block in `signInCallback` to also persist `profile.name` — **unconditionally, on every sign-in**:
 
 ```ts
-if (profile.name && entry.name === null) {
-  await prisma.allowlist.update({ where: { email }, data: { name: profile.name } })
+if (profile.name && entry.name !== profile.name) {
+  // Always re-sync: `name` is a mirror of what Google reports, nothing more.
+  // An admin's correction lives in adminOverrideName and is never touched here,
+  // so re-syncing cannot clobber it.
+  data.name = profile.name
 }
 ```
 
-Combine this with the existing `googleSub` update into a single `update` call rather than issuing two writes. Document the rule in a comment: first sign-in seeds the name; after that the stored value — whether seeded or admin-set — wins, because there is no way to distinguish "admin corrected this" from "Google changed this" after the fact, and a silently-reverting correction is the worse failure.
+Combine this with the existing `googleSub` update into a single `update` call rather than issuing two writes, and skip the write entirely when nothing changed.
+
+Because the override lives in its own column, there is no latch and no lost update: Google's name stays current, the admin's correction stays authoritative, and clearing `adminOverrideName` simply falls back to whatever Google most recently reported.
 
 Also add `name` to `sessionCallback`/`jwtCallback` only if a later task actually needs it in the session. It probably does not — every display path reads from the database — so prefer not to widen the token.
 
@@ -294,8 +316,9 @@ Also add `name` to `sessionCallback`/`jwtCallback` only if a later task actually
 
 - [ ] **Step 1 (RED): Tests**
   - Maps a set of emails to names in **one** `findMany` query, not N queries. Assert the call count.
-  - An email with no allowlist row falls back to the email string itself.
-  - An email whose row has `name: null` falls back to the email string itself.
+  - An email with no allowlist row resolves to **`null`**, never to the email string.
+  - An email whose row has no name resolves to **`null`**, never to the email string.
+  - Resolution prefers `adminOverrideName` over `name` when both are set.
   - An empty input set makes **zero** queries and returns an empty map.
   - Lookup is case-insensitive on the stored email — `recordedBy` was written lowercased by `requireUser`, but assert it rather than assuming.
 
@@ -311,10 +334,12 @@ Also add `name` to `sessionCallback`/`jwtCallback` only if a later task actually
  * neither lint, tsc, the test suite, nor `next build` catches — only Turbopack's
  * dev import graph does. Same reason src/lib/prisma-errors.ts exists.
  */
-export async function resolveDisplayNames(emails: Iterable<string>): Promise<Map<string, string>>
+export async function resolveDisplayNames(
+  emails: Iterable<string>
+): Promise<Map<string, string | null>>
 ```
 
-Falls back to the email so callers never branch on null.
+**Returns `null` for an unknown email — it never echoes the email back.** That asymmetry is load-bearing: an email-shaped fallback here would travel straight through `getEventSummary`'s unconditional `recordedByName` field and put a raw address in front of every volunteer, silently defeating the admin-only rule on emails. Callers decide what an unknown name looks like for *their* audience; this function never decides it for them. Prefer `adminOverrideName` over `name` when both are set.
 
 ### Task 2.4: Report page shows attribution — to everyone
 
@@ -325,12 +350,24 @@ This reverses a deliberate existing rule, and the change must be made loudly rat
 - [ ] **Step 1 (RED): Tests**
   - `getEventSummary` now returns `recordedByName` on every row for a **VOLUNTEER** as well as an ADMIN. The two existing tests at `tests/actions-attendance.test.ts:285` ("hides recordedBy from a volunteer") and `:292` are the ones being changed — **rewrite them to encode the new rule**, don't delete them.
   - `recordedBy` (the raw email) stays **ADMIN-only**. The reversal is about showing *names* to volunteers; it is not a decision to start leaking colleagues' email addresses into a volunteer-facing view, and nothing in the feedback asks for that.
-  - A row whose recorder is not on the allowlist renders the email as its name (the fallback).
+  - **A row whose recorder has no resolvable name never shows a volunteer the email.** Assert it directly: as a VOLUNTEER, `recordedByName` for an unknown recorder is `'Unknown'` and does **not** contain an `@`. As an ADMIN it may fall back to the email. Write this even though it looks redundant against the masking tests — it is the regression test for the leak below.
   - `getEventSummary` issues one name-resolution query regardless of row count.
 
 - [ ] **Step 2 (GREEN): Implement**
 
-In `getEventSummary`, collect the distinct `recordedBy` values, call `resolveDisplayNames()` once, and add `recordedByName: string` to each row unconditionally. Leave the existing `recordedBy: user.role === 'ADMIN' ? ... : undefined` line **exactly as it is** and update the surrounding doc comment to state the new split precisely: names for everyone, raw emails for admins only.
+In `getEventSummary`, collect the distinct `recordedBy` values, call `resolveDisplayNames()` once, and add `recordedByName: string` to each row unconditionally.
+
+**Resolve the null case per-audience, or this feature leaks the very emails it is meant to keep admin-only:**
+
+```ts
+const resolved = names.get(record.recordedBy) ?? null
+const recordedByName =
+  resolved ?? (user.role === 'ADMIN' ? record.recordedBy : 'Unknown')
+```
+
+Without that branch, an email-shaped fallback reaches every volunteer through the field added to satisfy the *names* request. Not hypothetical: a volunteer since removed from the allowlist has no row to resolve, and their historical counts are exactly what someone reviewing an old service is looking at.
+
+Leave the existing `recordedBy: user.role === 'ADMIN' ? ... : undefined` line **exactly as it is** and update the surrounding doc comment to state the new split precisely: names for everyone, raw emails for admins only.
 
 Also return a service-level `recordedByNames: string[]` — the distinct recorders for the whole event, in first-recorded order. The feedback asks who entered information "into each service", which is a per-service question, not only a per-row one.
 
@@ -343,15 +380,15 @@ On the report page, add a "Counts entered by: …" line in the header block next
 **Files:** Modify `src/lib/actions/attendance.ts`, `src/components/ManageTable.tsx`, `src/app/api/export/route.ts`, `tests/actions-attendance.test.ts`, `tests/api-export.test.ts`
 
 - [ ] **Step 1 (RED):** `getManageRows` returns `recordedByName` alongside `recordedBy`. `getExportRows` returns it too. The CSV header gains `Recorded By Name` immediately after the existing `Recorded By`; assert the existing `Recorded By` column still carries the **email**, unchanged and in its original position.
-- [ ] **Step 2 (GREEN):** Add the field to `ManageRow` and `ExportRow`, resolve names once per call, and render `{row.recordedByName ?? '—'}` at `ManageTable.tsx:61`. This is an admin view, so show the email as a `<small>` beneath the name — an admin revoking access needs the address, and the name alone is ambiguous if two people share one.
+- [ ] **Step 2 (GREEN):** Add the field to `ManageRow` and `ExportRow`, resolve names once per call, and render `{row.recordedByName ?? '—'}` at `ManageTable.tsx:61`. Both paths are admin-only end to end (`getManageRows` and `getExportRows` each call `requireAdmin()`), so the email fallback is correct here — unlike `getEventSummary`, which is not. This is an admin view, so show the email as a `<small>` beneath the name — an admin revoking access needs the address, and the name alone is ambiguous if two people share one.
 - [ ] **Step 3:** Speaker rows in `getExportRows` get the same treatment — `ServiceSpeaker.recordedBy` is an email on the identical footing.
 
 ### Task 2.6: Admin name override in Settings
 
 **Files:** Modify `src/lib/actions/allowlist.ts`, `src/lib/validation.ts`; modify `tests/actions-allowlist.test.ts`
 
-- [ ] **Step 1 (RED):** `updateAllowlistName` requires ADMIN; Zod-trims and length-caps the name (reuse `SPEAKER_NAME_MAX`'s 80, or add `DISPLAY_NAME_MAX = 80` for clarity); an empty string clears the name back to `null` (which re-arms the sign-in seeding from Task 2.2); a nonexistent id errors cleanly; `revalidatePath('/settings')` is called.
-- [ ] **Step 2 (GREEN):** Implement `updateAllowlistName` plus a `useActionState`-compatible `updateAllowlistNameAction`, following the exact shape of the existing `addAllowlistEntryAction` (AuthzError → inline message, ZodError → `friendlyValidationMessage`, anything else rethrown). Add `name: 'Name'` to `FIELD_LABELS`.
+- [ ] **Step 1 (RED):** `updateAllowlistName` requires ADMIN; Zod-trims and length-caps the name (reuse `SPEAKER_NAME_MAX`'s 80, or add `DISPLAY_NAME_MAX = 80` for clarity); an empty string clears `adminOverrideName` back to `null`, after which display falls through to Google's `name`; a nonexistent id errors cleanly; `revalidatePath('/settings')` is called.
+- [ ] **Step 2 (GREEN):** Implement `updateAllowlistName` — writing **`adminOverrideName`, never `name`** — plus a `useActionState`-compatible `updateAllowlistNameAction`, following the exact shape of the existing `addAllowlistEntryAction` (AuthzError → inline message, ZodError → `friendlyValidationMessage`, anything else rethrown). Add `name: 'Name'` to `FIELD_LABELS`.
 - [ ] **Step 3:** Extend `listAllowlist` to order by `[{ isActive: 'desc' }, { role: 'asc' }, { name: 'asc' }, { email: 'asc' }]` so Phase 3's grouping gets pre-sorted data. Note `role: 'asc'` puts `ADMIN` before `VOLUNTEER` alphabetically — convenient, but Phase 3 must not depend on that accident; it groups explicitly.
 
 ---
@@ -413,10 +450,11 @@ These are **not** optional cleanups. Each one is an existing assertion that will
 - **`:285` "hides recordedBy from a volunteer"** and **`:292` "includes recordedBy for an admin"** — already called out in Task 2.4. Rewrite to encode the new split (names for everyone, raw emails admin-only); do not delete.
 - **`:160` "always derives recordedBy from the session"** — must pass **unchanged**. It is the security assertion this whole phase must not weaken. If a change to it seems necessary, that is a signal the implementation is wrong, not the test.
 - Every `getEventSummary` / `getManageRows` / `getExportRows` fixture gains `recordedByName`, and `getExportRows`' `orderBy` assertion (if present) gains `startTime`.
+- **The `eventFindMany` mock fixtures for `getExportRows` (around `:331` and `:400`) need `startTime: '09:30'`.** They mock whole `Event` rows and currently carry only `id`/`name`/`serviceDate`/`isArchived`/`records`. Without the field, `getExportRows` reads `event.startTime` as `undefined` and emits `serviceTime: undefined` — which does **not** throw, so the test stays green while producing a broken CSV column. This is the silent-failure class the inventory exists to catch. The `:329` test's name ("the full 9-field shape") also goes stale once `serviceTime` and `recordedByName` land — rename it and update the field count.
 
 ### `tests/actions-allowlist.test.ts`
 
-- **`:62` `listAllowlist`** — asserts only the returned value, so Task 2.6's `orderBy` change does not break it. **Add** an explicit `orderBy` assertion anyway: Phase 3's grouping depends on that ordering, and it is currently untested.
+- **`:62` `listAllowlist`** — asserts only the returned value, so Task 2.6's `orderBy` change does not break it. Note the display name is now `adminOverrideName ?? name`, which Postgres will not sort on directly — either order with `COALESCE` in raw SQL or sort in memory after the fetch; the list is capped small enough that in-memory is fine. **Add** an explicit `orderBy` assertion anyway: Phase 3's grouping depends on that ordering, and it is currently untested.
 
 ### `tests/auth.test.ts`
 
