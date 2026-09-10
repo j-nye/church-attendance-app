@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { getEventSummary } from '@/lib/actions/attendance'
 import { listSpeakers } from '@/lib/actions/speakers'
 import { PrintButton } from '@/components/PrintButton'
-import { formatServiceDate } from '@/lib/dates'
+import { formatServiceDate, formatServiceTime } from '@/lib/dates'
 import { TYPE_LABELS } from '@/lib/category-labels'
 import { requireUserPage } from '@/lib/authz'
 import { AppHeader } from '@/components/AppHeader'
@@ -22,7 +22,9 @@ export default async function ReportPage({ params }: { params: Promise<{ eventId
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <h1 style={{ fontSize: 'var(--text-xl)', marginBottom: 0 }}>{event.name}</h1>
-            <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>{formatServiceDate(event.serviceDate)}</p>
+            <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>
+              {formatServiceDate(event.serviceDate)} · {formatServiceTime(event.startTime)}
+            </p>
             <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>
               Speakers: {speakers.length > 0 ? speakers.map((speaker) => speaker.name).join(', ') : '—'}
             </p>

@@ -7,6 +7,7 @@ import { idSchema, serviceDateSchema } from '@/lib/validation'
 
 const COLUMNS = [
   'Service Date',
+  'Service Time',
   'Service Name',
   'Archived',
   'Category Type',
@@ -20,6 +21,7 @@ const COLUMNS = [
 function toCsvRow(row: ExportRow): Record<string, string> {
   return {
     'Service Date': row.serviceDate,
+    'Service Time': row.serviceTime,
     'Service Name': row.serviceName,
     Archived: String(row.archived),
     'Category Type': row.categoryType,

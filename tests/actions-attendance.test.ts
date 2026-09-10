@@ -246,6 +246,7 @@ describe('getEventSummary', () => {
     id: 'e1',
     name: 'Sunday Service',
     serviceDate: '2026-08-09',
+    startTime: '09:30',
     records: [
       {
         categoryId: 'c1',
@@ -326,13 +327,14 @@ describe('getExportRows', () => {
     expect(speakerFindMany).not.toHaveBeenCalled()
   })
 
-  it('flattens multiple events into one row array with the full 9-field shape', async () => {
+  it('flattens multiple events into one row array with the full 10-field shape', async () => {
     requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
     eventFindMany.mockResolvedValue([
       {
         id: 'e1',
         name: 'Sunday Service',
         serviceDate: '2026-08-09',
+        startTime: '09:30',
         isArchived: false,
         records: [
           {
@@ -346,6 +348,7 @@ describe('getExportRows', () => {
         id: 'e2',
         name: 'Sunday Service',
         serviceDate: '2026-08-16',
+        startTime: '11:00',
         isArchived: true,
         records: [
           {
@@ -362,6 +365,7 @@ describe('getExportRows', () => {
     expect(result).toEqual([
       {
         serviceDate: '2026-08-09',
+        serviceTime: '9:30 AM',
         serviceName: 'Sunday Service',
         archived: false,
         categoryType: 'SECTION',
@@ -373,6 +377,7 @@ describe('getExportRows', () => {
       },
       {
         serviceDate: '2026-08-16',
+        serviceTime: '11:00 AM',
         serviceName: 'Sunday Service',
         archived: true,
         categoryType: 'SERVICE_METRIC',
@@ -402,6 +407,7 @@ describe('getExportRows', () => {
         id: 'e1',
         name: 'Sunday Service',
         serviceDate: '2026-08-09',
+        startTime: '09:30',
         isArchived: false,
         records: [
           {
@@ -434,6 +440,7 @@ describe('getExportRows', () => {
     expect(result).toEqual([
       {
         serviceDate: '2026-08-09',
+        serviceTime: '9:30 AM',
         serviceName: 'Sunday Service',
         archived: false,
         categoryType: 'SECTION',
@@ -445,6 +452,7 @@ describe('getExportRows', () => {
       },
       {
         serviceDate: '2026-08-09',
+        serviceTime: '9:30 AM',
         serviceName: 'Sunday Service',
         archived: false,
         categoryType: 'SPEAKER',
@@ -456,6 +464,7 @@ describe('getExportRows', () => {
       },
       {
         serviceDate: '2026-08-09',
+        serviceTime: '9:30 AM',
         serviceName: 'Sunday Service',
         archived: false,
         categoryType: 'SPEAKER',
@@ -479,6 +488,7 @@ describe('getExportRows', () => {
         id: 'e1',
         name: 'Sunday Service',
         serviceDate: '2026-08-09',
+        startTime: '09:30',
         isArchived: false,
         records: [
           {

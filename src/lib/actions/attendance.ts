@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { requireUser, requireAdmin } from '@/lib/authz'
 import { saveCountSchema, deleteCountSchema, idSchema } from '@/lib/validation'
 import { TYPE_LABELS } from '@/lib/category-labels'
+import { formatServiceTime } from '@/lib/dates'
 
 /**
  * Record or correct a headcount. Exactly one row exists per (event, category),
@@ -83,7 +84,7 @@ export async function getEventSummary(eventId: string) {
     .reduce((sum, record) => sum + record.count, 0)
 
   return {
-    event: { id: event.id, name: event.name, serviceDate: event.serviceDate },
+    event: { id: event.id, name: event.name, serviceDate: event.serviceDate, startTime: event.startTime },
     rows,
     totals: {
       sanctuary: totalBy('SECTION'),
@@ -97,6 +98,7 @@ export async function getEventSummary(eventId: string) {
 
 export type ExportRow = {
   serviceDate: string
+  serviceTime: string
   serviceName: string
   archived: boolean
   categoryType: string
@@ -149,6 +151,7 @@ export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
   return events.flatMap((event) => {
     const attendanceRows: ExportRow[] = event.records.map((record) => ({
       serviceDate: event.serviceDate,
+      serviceTime: formatServiceTime(event.startTime),
       serviceName: event.name,
       archived: event.isArchived,
       categoryType: record.category.type,
@@ -161,6 +164,7 @@ export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
 
     const speakerRows: ExportRow[] = (speakersByEvent.get(event.id) ?? []).map((speaker) => ({
       serviceDate: event.serviceDate,
+      serviceTime: formatServiceTime(event.startTime),
       serviceName: event.name,
       archived: event.isArchived,
       categoryType: 'SPEAKER',

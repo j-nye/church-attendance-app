@@ -88,8 +88,19 @@ test('two services on the same date route to separate entry screens with separat
   await expect(
     page.getByRole('button', { name: /start counting today.s service/i })
   ).toHaveCount(0)
-  const earlyButton = page.getByRole('button', { name: /9:30 AM/i })
-  const lateButton = page.getByRole('button', { name: /11:00 AM/i })
+  // Match the exact accessible name (`Start counting — <time> (<name>)`) —
+  // a broad /9:30 AM/i regex also matches the earlier test's own
+  // getOrCreateTodayEvent-created "today" service (same default 09:30) plus
+  // the dashboard's other same-day ServiceCard elements, causing a strict
+  // mode violation.
+  const earlyButton = page.getByRole('button', {
+    name: 'Start counting — 9:30 AM (Early Service E2E)',
+    exact: true,
+  })
+  const lateButton = page.getByRole('button', {
+    name: 'Start counting — 11:00 AM (Late Service E2E)',
+    exact: true,
+  })
   await expect(earlyButton).toBeVisible()
   await expect(lateButton).toBeVisible()
 
@@ -105,7 +116,7 @@ test('two services on the same date route to separate entry screens with separat
   await expect(earlyDialog).not.toBeVisible()
 
   await page.goto('/dashboard')
-  await page.getByRole('button', { name: /11:00 AM/i }).click()
+  await lateButton.click()
   await expect(page).toHaveURL(/\/entry\/[^/]+$/)
   const lateEventId = new URL(page.url()).pathname.split('/').pop()!
   expect(lateEventId).not.toBe(earlyEventId)

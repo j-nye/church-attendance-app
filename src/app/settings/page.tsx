@@ -29,6 +29,7 @@ export default async function SettingsPage() {
     id: e.id,
     name: e.name,
     serviceDate: e.serviceDate,
+    startTime: e.startTime,
     isArchived: e.isArchived,
   }))
   const defaultServiceDate = nextSundayServiceDate()
