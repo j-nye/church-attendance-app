@@ -11,6 +11,7 @@ const categoryFindMany = vi.fn()
 const attendanceUpsert = vi.fn()
 const attendanceFindMany = vi.fn()
 const speakerFindMany = vi.fn()
+const allowlistFindMany = vi.fn()
 
 const txAttendanceFindUnique = vi.fn()
 const txAttendanceDeleteMany = vi.fn()
@@ -59,6 +60,9 @@ vi.mock('@/lib/prisma', () => ({
     serviceSpeaker: {
       findMany: (...args: unknown[]) => speakerFindMany(...args),
     },
+    allowlist: {
+      findMany: (...args: unknown[]) => allowlistFindMany(...args),
+    },
     $transaction: (...args: [callback: (tx: unknown) => Promise<unknown>]) => transaction(...args),
   },
 }))
@@ -86,6 +90,11 @@ beforeEach(() => {
   attendanceFindMany.mockReset()
   speakerFindMany.mockReset()
   speakerFindMany.mockResolvedValue([])
+  allowlistFindMany.mockReset()
+  // Default: nobody resolves. Individual tests override this to assert
+  // actual name resolution; tests that don't care about names just get the
+  // email-fallback / 'Unknown' behavior, whichever is correct for their role.
+  allowlistFindMany.mockResolvedValue([])
   transaction.mockClear()
   txAttendanceFindUnique.mockReset()
   txAttendanceDeleteMany.mockReset()
@@ -283,18 +292,94 @@ describe('getEventSummary', () => {
     await expect(getEventSummary('e1')).rejects.toThrow('No such service')
   })
 
-  it('hides recordedBy from a volunteer', async () => {
+  it('hides the raw recordedBy email from a volunteer, but still exposes recordedByName to them', async () => {
     requireUser.mockResolvedValue(VOLUNTEER)
     eventFindUnique.mockResolvedValue(baseEvent)
+    allowlistFindMany.mockResolvedValue([
+      { email: 'vol@example.com', name: 'Vera Volunteer', adminOverrideName: null },
+      { email: 'vol2@example.com', name: 'Victor Two', adminOverrideName: null },
+    ])
     const result = await getEventSummary('e1')
+    // The reversal is about showing NAMES to volunteers, not about starting
+    // to leak raw email addresses — recordedBy stays masked exactly as today.
     expect(result.rows.every((row) => row.recordedBy === undefined)).toBe(true)
+    expect(result.rows.find((row) => row.categoryId === 'c1')?.recordedByName).toBe('Vera Volunteer')
+    expect(result.rows.find((row) => row.categoryId === 'c2')?.recordedByName).toBe('Victor Two')
   })
 
-  it('includes recordedBy for an admin', async () => {
+  it('includes both recordedBy and recordedByName for an admin', async () => {
     requireUser.mockResolvedValue(ADMIN)
     eventFindUnique.mockResolvedValue(baseEvent)
+    allowlistFindMany.mockResolvedValue([
+      { email: 'vol@example.com', name: 'Vera Volunteer', adminOverrideName: null },
+    ])
     const result = await getEventSummary('e1')
-    expect(result.rows.find((row) => row.categoryId === 'c1')?.recordedBy).toBe('vol@example.com')
+    const row = result.rows.find((row) => row.categoryId === 'c1')
+    expect(row?.recordedBy).toBe('vol@example.com')
+    expect(row?.recordedByName).toBe('Vera Volunteer')
+  })
+
+  it('shows "Unknown" — never the raw email — to a volunteer when a recorder cannot be resolved', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(baseEvent)
+    allowlistFindMany.mockResolvedValue([]) // nobody resolves
+    const result = await getEventSummary('e1')
+    const row = result.rows.find((row) => row.categoryId === 'c1')
+    // Written even though it looks redundant against the masking test above:
+    // this is the regression test for the specific email-leak class of bug —
+    // an unresolvable name silently falling through to the raw address.
+    expect(row?.recordedByName).toBe('Unknown')
+    expect(row?.recordedByName).not.toContain('@')
+  })
+
+  it('falls back to the raw email (not "Unknown") for an unresolved recorder when viewed by an admin', async () => {
+    requireUser.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue(baseEvent)
+    allowlistFindMany.mockResolvedValue([])
+    const result = await getEventSummary('e1')
+    const row = result.rows.find((row) => row.categoryId === 'c1')
+    expect(row?.recordedByName).toBe('vol@example.com')
+  })
+
+  it('issues exactly one name-resolution query regardless of row count', async () => {
+    requireUser.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue(baseEvent) // 3 records, 2 distinct recorders
+    allowlistFindMany.mockResolvedValue([])
+    await getEventSummary('e1')
+    expect(allowlistFindMany).toHaveBeenCalledTimes(1)
+  })
+
+  it('recordedByNames dedupes two records from the same email into a single entry', async () => {
+    requireUser.mockResolvedValue(ADMIN)
+    eventFindUnique.mockResolvedValue({
+      ...baseEvent,
+      records: [
+        baseEvent.records[0], // c1, vol@example.com
+        { ...baseEvent.records[2] }, // c3, vol@example.com again — same person
+      ],
+    })
+    allowlistFindMany.mockResolvedValue([
+      { email: 'vol@example.com', name: 'Vera Volunteer', adminOverrideName: null },
+    ])
+    const result = await getEventSummary('e1')
+    expect(result.recordedByNames).toEqual(['Vera Volunteer'])
+  })
+
+  it('recordedByNames collapses two different unresolvable recorders into a single "Unknown" for a volunteer', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue({
+      ...baseEvent,
+      records: [
+        { ...baseEvent.records[0], recordedBy: 'ghost1@example.com' },
+        { ...baseEvent.records[1], recordedBy: 'ghost2@example.com' },
+      ],
+    })
+    allowlistFindMany.mockResolvedValue([]) // neither resolves
+    const result = await getEventSummary('e1')
+    // Without stage-2 collapsing this would be ['Unknown', 'Unknown'] — two
+    // different people who are both unresolvable render as one entry, since
+    // a reader cannot tell two identical strings apart anyway.
+    expect(result.recordedByNames).toEqual(['Unknown'])
   })
 
   it('computes totals by category type and a grand total that excludes categories with countsTowardTotal: false', async () => {
@@ -327,7 +412,7 @@ describe('getExportRows', () => {
     expect(speakerFindMany).not.toHaveBeenCalled()
   })
 
-  it('flattens multiple events into one row array with the full 10-field shape', async () => {
+  it('flattens multiple events into one row array with the full 11-field shape', async () => {
     requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
     eventFindMany.mockResolvedValue([
       {
@@ -359,6 +444,12 @@ describe('getExportRows', () => {
         ],
       },
     ])
+    // vol@example.com resolves to a name; vol2@example.com does not — this
+    // one test exercises both the resolved-name path and the admin-only
+    // email-fallback path for an unresolved recorder.
+    allowlistFindMany.mockResolvedValue([
+      { email: 'vol@example.com', name: 'Vera Volunteer', adminOverrideName: null },
+    ])
 
     const result = await getExportRows(['e1', 'e2'])
 
@@ -374,6 +465,7 @@ describe('getExportRows', () => {
         count: 10,
         countsTowardTotal: true,
         recordedBy: 'vol@example.com',
+        recordedByName: 'Vera Volunteer',
       },
       {
         serviceDate: '2026-08-16',
@@ -386,6 +478,9 @@ describe('getExportRows', () => {
         count: 2,
         countsTowardTotal: false,
         recordedBy: 'vol2@example.com',
+        // Unresolved and admin-only end to end, so this falls back to the
+        // raw email rather than 'Unknown'.
+        recordedByName: 'vol2@example.com',
       },
     ])
     expect(eventFindMany).toHaveBeenCalledWith({
@@ -434,6 +529,12 @@ describe('getExportRows', () => {
         createdAt: new Date('2026-08-09T09:05:00Z'),
       },
     ])
+    // ServiceSpeaker.recordedBy is an email on the identical footing as
+    // AttendanceRecord.recordedBy, so it gets resolved the same way.
+    allowlistFindMany.mockResolvedValue([
+      { email: 'vol@example.com', name: 'Vera Volunteer', adminOverrideName: null },
+      { email: 'vol2@example.com', name: 'Victor Two', adminOverrideName: null },
+    ])
 
     const result = await getExportRows(['e1'])
 
@@ -449,6 +550,7 @@ describe('getExportRows', () => {
         count: 10,
         countsTowardTotal: true,
         recordedBy: 'vol@example.com',
+        recordedByName: 'Vera Volunteer',
       },
       {
         serviceDate: '2026-08-09',
@@ -461,6 +563,7 @@ describe('getExportRows', () => {
         count: '',
         countsTowardTotal: false,
         recordedBy: 'vol@example.com',
+        recordedByName: 'Vera Volunteer',
       },
       {
         serviceDate: '2026-08-09',
@@ -473,6 +576,7 @@ describe('getExportRows', () => {
         count: '',
         countsTowardTotal: false,
         recordedBy: 'vol2@example.com',
+        recordedByName: 'Victor Two',
       },
     ])
     expect(speakerFindMany).toHaveBeenCalledWith({
@@ -530,6 +634,7 @@ describe('getManageRows', () => {
         categoryType: 'SECTION',
         count: undefined,
         recordedBy: undefined,
+        recordedByName: undefined,
         updatedAt: undefined,
       },
     ])
@@ -558,12 +663,16 @@ describe('getManageRows', () => {
         categoryType: 'CLASSROOM',
         count: 7,
         recordedBy: 'vol@example.com',
+        // Unresolved (allowlistFindMany defaults to []) — this is an
+        // admin-only view end to end, so falling back to the email is
+        // correct, unlike getEventSummary's volunteer-facing 'Unknown'.
+        recordedByName: 'vol@example.com',
         updatedAt,
       },
     ])
   })
 
-  it('populates count, recordedBy, and updatedAt for an active category that has a record', async () => {
+  it('populates count, recordedBy, recordedByName, and updatedAt for an active category that has a record', async () => {
     requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
     categoryFindMany.mockResolvedValue([{ id: 'c1', name: 'Main Hall', type: 'SECTION' }])
     const updatedAt = new Date('2026-08-09T10:00:00Z')
@@ -586,9 +695,32 @@ describe('getManageRows', () => {
         categoryType: 'SECTION',
         count: 50,
         recordedBy: 'vol@example.com',
+        recordedByName: 'vol@example.com',
         updatedAt,
       },
     ])
+  })
+
+  it('resolves recordedByName to the display name via resolveDisplayNames when the recorder is known', async () => {
+    requireAdmin.mockResolvedValue({ email: 'admin@example.com', role: 'ADMIN' })
+    categoryFindMany.mockResolvedValue([{ id: 'c1', name: 'Main Hall', type: 'SECTION' }])
+    const updatedAt = new Date('2026-08-09T10:00:00Z')
+    attendanceFindMany.mockResolvedValue([
+      {
+        categoryId: 'c1',
+        count: 50,
+        recordedBy: 'vol@example.com',
+        updatedAt,
+        category: { id: 'c1', name: 'Main Hall', type: 'SECTION' },
+      },
+    ])
+    allowlistFindMany.mockResolvedValue([
+      { email: 'vol@example.com', name: 'Vera Volunteer', adminOverrideName: null },
+    ])
+
+    const result = await getManageRows('e1')
+
+    expect(result[0].recordedByName).toBe('Vera Volunteer')
   })
 
   it('unions active categories with recorded categories: an unrecorded active category, a recorded active category, and a recorded retired category all appear exactly once', async () => {
@@ -624,6 +756,7 @@ describe('getManageRows', () => {
         categoryType: 'SECTION',
         count: 50,
         recordedBy: 'vol@example.com',
+        recordedByName: 'vol@example.com',
         updatedAt,
       },
       {
@@ -632,6 +765,7 @@ describe('getManageRows', () => {
         categoryType: 'CLASSROOM',
         count: undefined,
         recordedBy: undefined,
+        recordedByName: undefined,
         updatedAt: undefined,
       },
       {
@@ -640,6 +774,7 @@ describe('getManageRows', () => {
         categoryType: 'CLASSROOM',
         count: 7,
         recordedBy: 'vol2@example.com',
+        recordedByName: 'vol2@example.com',
         updatedAt,
       },
     ])

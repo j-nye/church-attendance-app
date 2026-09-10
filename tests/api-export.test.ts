@@ -104,6 +104,7 @@ describe('GET /api/export', () => {
         count: 5,
         countsTowardTotal: true,
         recordedBy: 'vol@example.com',
+        recordedByName: 'Vera Volunteer',
       },
     ])
 
@@ -115,8 +116,8 @@ describe('GET /api/export', () => {
       'attachment; filename="attendance-2026-08-16.csv"'
     )
     const body = await response.text()
-    expect(body).toContain('Service Date,Service Time,Service Name,Archived,Category Type,Group,Category,Count,Counts Toward Total,Recorded By')
-    expect(body).toContain('2026-08-16,9:30 AM,"Service - Sunday, August 16, 2026",false,SECTION,Sanctuary,Left Wing,5,true,vol@example.com')
+    expect(body).toContain('Service Date,Service Time,Service Name,Archived,Category Type,Group,Category,Count,Counts Toward Total,Recorded By,Recorded By Name')
+    expect(body).toContain('2026-08-16,9:30 AM,"Service - Sunday, August 16, 2026",false,SECTION,Sanctuary,Left Wing,5,true,vol@example.com,Vera Volunteer')
     expect(getExportRows).toHaveBeenCalledWith(['e1'])
   })
 
@@ -145,7 +146,7 @@ describe('GET /api/export', () => {
     expect(response.status).toBe(200)
     const body = await response.text()
     expect(body).toBe(
-      'Service Date,Service Time,Service Name,Archived,Category Type,Group,Category,Count,Counts Toward Total,Recorded By\r\n'
+      'Service Date,Service Time,Service Name,Archived,Category Type,Group,Category,Count,Counts Toward Total,Recorded By,Recorded By Name\r\n'
     )
   })
 
@@ -177,6 +178,7 @@ describe('GET /api/export', () => {
         count: '',
         countsTowardTotal: false,
         recordedBy: 'vol@example.com',
+        recordedByName: 'Vera Volunteer',
       },
     ])
 
@@ -184,7 +186,7 @@ describe('GET /api/export', () => {
 
     const body = await response.text()
     expect(body).toContain(
-      '2026-08-16,9:30 AM,"Service - Sunday, August 16, 2026",false,SPEAKER,Stage,Pastor Jones,,false,vol@example.com'
+      '2026-08-16,9:30 AM,"Service - Sunday, August 16, 2026",false,SPEAKER,Stage,Pastor Jones,,false,vol@example.com,Vera Volunteer'
     )
   })
 })

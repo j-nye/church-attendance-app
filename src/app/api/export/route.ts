@@ -16,6 +16,7 @@ const COLUMNS = [
   'Count',
   'Counts Toward Total',
   'Recorded By',
+  'Recorded By Name',
 ]
 
 function toCsvRow(row: ExportRow): Record<string, string> {
@@ -30,6 +31,7 @@ function toCsvRow(row: ExportRow): Record<string, string> {
     Count: String(row.count),
     'Counts Toward Total': String(row.countsTowardTotal),
     'Recorded By': row.recordedBy,
+    'Recorded By Name': row.recordedByName,
   }
 }
 

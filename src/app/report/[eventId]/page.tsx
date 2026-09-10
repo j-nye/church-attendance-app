@@ -9,7 +9,7 @@ import { AppHeader } from '@/components/AppHeader'
 
 export default async function ReportPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params
-  const [user, { event, rows, totals }, speakers] = await Promise.all([
+  const [user, { event, rows, totals, recordedByNames }, speakers] = await Promise.all([
     requireUserPage(),
     getEventSummary(eventId),
     listSpeakers(eventId),
@@ -27,6 +27,9 @@ export default async function ReportPage({ params }: { params: Promise<{ eventId
             </p>
             <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>
               Speakers: {speakers.length > 0 ? speakers.map((speaker) => speaker.name).join(', ') : '—'}
+            </p>
+            <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>
+              Counts entered by: {recordedByNames.length > 0 ? recordedByNames.join(', ') : '—'}
             </p>
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
@@ -67,11 +70,21 @@ export default async function ReportPage({ params }: { params: Promise<{ eventId
             <section key={type} className="card report-group" style={{ marginBottom: 'var(--space-4)' }}>
               <h2 style={{ marginTop: 0, fontSize: 'var(--text-lg)' }}>{TYPE_LABELS[type]}</h2>
               <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th style={{ textAlign: 'right' }}>Count</th>
+                    <th style={{ textAlign: 'right' }}>Recorded by</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {group.map((row) => (
                     <tr key={row.categoryId}>
                       <td>{row.name}</td>
                       <td style={{ textAlign: 'right', fontWeight: 700 }}>{row.count}</td>
+                      <td style={{ textAlign: 'right', color: 'var(--color-text-muted)' }}>
+                        {row.recordedByName}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
