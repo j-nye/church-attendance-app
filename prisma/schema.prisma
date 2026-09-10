@@ -29,6 +29,17 @@ model Allowlist {
   googleSub String?  @unique
   role      Role     @default(VOLUNTEER)
   isActive  Boolean  @default(true)
+  /// The name Google reports for this person. Re-synced on EVERY sign-in, so a
+  /// legitimate name change (marriage, correction) propagates on next login.
+  /// Null until their first sign-in.
+  name              String?
+  /// An admin's manual correction, which always wins over `name`. Kept in its
+  /// own column precisely so the two sources stay distinguishable: with a
+  /// single column there is no way to tell "an admin corrected this" from
+  /// "Google changed this", which forces a choice between clobbering the
+  /// correction every Sunday and freezing the Google name forever.
+  /// Display resolves as `adminOverrideName ?? name`.
+  adminOverrideName String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
