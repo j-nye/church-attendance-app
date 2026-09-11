@@ -4,11 +4,39 @@ import { revalidatePath } from 'next/cache'
 import { ZodError } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, AuthzError } from '@/lib/authz'
-import { allowlistEntrySchema, idSchema, friendlyValidationMessage } from '@/lib/validation'
+import {
+  allowlistEntrySchema,
+  idSchema,
+  friendlyValidationMessage,
+  updateAllowlistNameSchema,
+} from '@/lib/validation'
 
+/**
+ * Ordered isActive desc, then role asc, then display name asc, then email
+ * asc — Phase 3's grouping UI depends on this exact order. The display name
+ * (`adminOverrideName ?? name`) can't be expressed as a Prisma `orderBy`
+ * (Postgres would need `COALESCE`, which the query builder doesn't reach),
+ * so it's sorted in memory after the fetch. The allowlist is small enough
+ * that this is cheap, and a single comparator covering all four keys avoids
+ * the trap of a stable sort-by-name-only silently reshuffling the
+ * isActive/role groups it must not touch.
+ */
 export async function listAllowlist() {
   await requireAdmin()
-  return prisma.allowlist.findMany({ orderBy: [{ isActive: 'desc' }, { email: 'asc' }] })
+  const entries = await prisma.allowlist.findMany({
+    orderBy: [{ isActive: 'desc' }, { role: 'asc' }, { email: 'asc' }],
+  })
+
+  return [...entries].sort((a, b) => {
+    if (a.isActive !== b.isActive) return a.isActive ? -1 : 1
+    if (a.role !== b.role) return a.role < b.role ? -1 : 1
+
+    const nameA = a.adminOverrideName ?? a.name ?? ''
+    const nameB = b.adminOverrideName ?? b.name ?? ''
+    if (nameA !== nameB) return nameA < nameB ? -1 : 1
+
+    return a.email < b.email ? -1 : a.email > b.email ? 1 : 0
+  })
 }
 
 export async function addAllowlistEntry(input: unknown) {
@@ -48,6 +76,28 @@ export async function deactivateAllowlistEntry(input: unknown) {
   revalidatePath('/settings')
 }
 
+/**
+ * Writes an admin's manual name correction. Deliberately writes
+ * `adminOverrideName`, never `name` — `name` is the Google-sync mirror kept
+ * current by signInCallback on every sign-in, and this function exists
+ * specifically so an admin's correction survives that resync. An empty (or
+ * whitespace-only) name clears the override back to null, after which
+ * display falls through to `name` via resolveDisplayNames().
+ */
+export async function updateAllowlistName(input: unknown) {
+  await requireAdmin()
+  const { id, name } = updateAllowlistNameSchema.parse(input)
+
+  const target = await prisma.allowlist.findUnique({ where: { id } })
+  if (!target) throw new Error('No such allowlist entry')
+
+  await prisma.allowlist.update({
+    where: { id },
+    data: { adminOverrideName: name === '' ? null : name },
+  })
+  revalidatePath('/settings')
+}
+
 export type AllowlistFormState = { ok: boolean; message?: string }
 
 /**
@@ -67,6 +117,31 @@ export async function addAllowlistEntryAction(
 ): Promise<AllowlistFormState> {
   try {
     await addAllowlistEntry({ email: formData.get('email'), role: formData.get('role') })
+  } catch (error) {
+    if (error instanceof AuthzError) {
+      return { ok: false, message: 'You are not authorized to do that.' }
+    }
+    if (error instanceof ZodError) {
+      return { ok: false, message: friendlyValidationMessage(error) }
+    }
+    throw error
+  }
+  return { ok: true }
+}
+
+/**
+ * useActionState-compatible wrapper around updateAllowlistName() for the
+ * settings page's inline name-edit control. Same error ladder as
+ * addAllowlistEntryAction: AuthzError becomes an inline message, ZodError
+ * becomes the friendly validation sentence, anything else (including the
+ * "No such allowlist entry" case) rethrows for the app error boundary.
+ */
+export async function updateAllowlistNameAction(
+  _prevState: AllowlistFormState,
+  formData: FormData
+): Promise<AllowlistFormState> {
+  try {
+    await updateAllowlistName({ id: formData.get('id'), name: formData.get('name') })
   } catch (error) {
     if (error instanceof AuthzError) {
       return { ok: false, message: 'You are not authorized to do that.' }

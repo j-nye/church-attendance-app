@@ -102,6 +102,18 @@ export const allowlistEntrySchema = z.object({
   role: roleSchema,
 })
 
+export const DISPLAY_NAME_MAX = 80
+
+/**
+ * Deliberately no `.min(1)`: an empty (or whitespace-only) string is how an
+ * admin clears `adminOverrideName` back to null so display falls through to
+ * the Google-synced `name` again. Only the upper bound is enforced here.
+ */
+export const updateAllowlistNameSchema = z.object({
+  id: idSchema,
+  name: z.string().trim().max(DISPLAY_NAME_MAX),
+})
+
 export type SaveCountInput = z.infer<typeof saveCountSchema>
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>
 export type CreateEventInput = z.infer<typeof createEventSchema>
