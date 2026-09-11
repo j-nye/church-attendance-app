@@ -1,9 +1,9 @@
 import { requireAdminPage } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
-import { deactivateAllowlistEntry, listAllowlist } from '@/lib/actions/allowlist'
+import { listAllowlist } from '@/lib/actions/allowlist'
 import { listRecentEvents } from '@/lib/actions/events'
 import { nextSundayServiceDate } from '@/lib/dates'
-import { AddAllowlistForm } from '@/components/AddAllowlistForm'
+import { AllowlistSection, type AllowlistRowData } from '@/components/AllowlistSection'
 import { AppHeader } from '@/components/AppHeader'
 import { CategorySection, type CategoryRowData } from '@/components/CategorySection'
 import { ServicesSection, type ServiceRowData } from '@/components/ServicesSection'
@@ -33,6 +33,17 @@ export default async function SettingsPage() {
     isArchived: e.isArchived,
   }))
   const defaultServiceDate = nextSundayServiceDate()
+
+  const allowlistRows: AllowlistRowData[] = allowlist.map((a) => ({
+    id: a.id,
+    email: a.email,
+    role: a.role,
+    isActive: a.isActive,
+    name: a.name,
+    adminOverrideName: a.adminOverrideName,
+    createdAt: a.createdAt,
+    updatedAt: a.updatedAt,
+  }))
 
   const categories: CategoryRowData[] = categoryRecords.map((c) => ({
     id: c.id,
@@ -72,26 +83,7 @@ export default async function SettingsPage() {
           />
         ))}
 
-        <section className="card">
-          <h2 style={{ marginTop: 0 }}>Who can sign in</h2>
-          <AddAllowlistForm />
-
-          {allowlist.map((entry) => (
-            <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-2) 0' }}>
-              <span style={{ opacity: entry.isActive ? 1 : 0.5 }}>
-                {entry.email} <small style={{ color: 'var(--color-text-muted)' }}>({entry.role})</small>
-              </span>
-              {entry.isActive && (
-                <form action={async () => { 'use server'; await deactivateAllowlistEntry(entry.id) }}>
-                  <button type="submit">Revoke</button>
-                </form>
-              )}
-            </div>
-          ))}
-          <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-            Revoking takes effect immediately — the next action that person attempts is refused.
-          </p>
-        </section>
+        <AllowlistSection entries={allowlistRows} />
 
         <section className="card" style={{ marginTop: 'var(--space-6)' }}>
           <h2 style={{ marginTop: 0 }}>Export attendance data</h2>
