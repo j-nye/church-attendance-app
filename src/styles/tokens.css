@@ -9,6 +9,7 @@
   --color-accent: #0072B2;
   --color-accent-contrast: #FFFFFF;
   --color-danger: #B34700;
+  --color-danger-bg: #FFF0E6;
   --color-success: #00785A;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -47,6 +48,7 @@
     --color-accent: #56B4E9;
     --color-accent-contrast: #05121C;
     --color-danger: #FF8A3D;
+    --color-danger-bg: #2F180A;
     --color-success: #33D6A6;
     --shadow: 0 8px 24px rgb(0 0 0 / 0.35);
   }

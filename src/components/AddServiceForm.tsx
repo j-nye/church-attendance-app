@@ -147,9 +147,9 @@ export function AddServiceForm({
           <div role="status" style={{
             margin: 0,
             padding: 'var(--space-3)',
-            background: 'var(--color-surface-raised)',
+            background: 'var(--color-danger-bg)',
             borderRadius: 'var(--radius)',
-            borderLeft: '4px solid var(--color-accent)',
+            borderLeft: '4px solid var(--color-danger)',
             fontSize: 'var(--text-sm)',
             color: 'var(--color-text)'
           }}>
