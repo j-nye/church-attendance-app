@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Prisma } from '@prisma/client'
 import { ZodError } from 'zod'
+import { todayServiceDate, formatServiceDate, formatServiceTime } from '@/lib/dates'
 
 const requireAdmin = vi.fn()
 const requireUser = vi.fn()
@@ -57,6 +58,10 @@ const {
   listTodayEvents,
   updateEventSchedule,
   updateEventScheduleAction,
+  addTodayEvent,
+  addNamedTodayEvent,
+  addTodayEventAction,
+  addNamedTodayEventAction,
 } = await import('@/lib/actions/events')
 
 beforeEach(() => {
@@ -287,6 +292,409 @@ describe('getOrCreateTodayEvent', () => {
     eventCreate.mockRejectedValue(new Error('connection reset'))
 
     await expect(getOrCreateTodayEvent('09:30')).rejects.toThrow('connection reset')
+  })
+})
+
+const VOLUNTEER = { email: 'vol@example.com', role: 'VOLUNTEER' as const }
+
+function collisionRow(overrides: Partial<{
+  id: string
+  name: string
+  startTime: string
+  isArchived: boolean
+}> = {}) {
+  return {
+    id: 'existing1',
+    name: `Service - ${formatServiceDate(todayServiceDate())} ${formatServiceTime('11:00')}`,
+    startTime: '11:00',
+    isArchived: false,
+    ...overrides,
+  }
+}
+
+describe('addTodayEvent', () => {
+  it('requires a signed-in user', async () => {
+    requireUser.mockRejectedValue(new AuthzError('UNAUTHENTICATED'))
+    await expect(addTodayEvent('11:00')).rejects.toThrow(AuthzError)
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('allows a VOLUNTEER to add a service — requireAdmin is never called in this flow', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventCreate.mockResolvedValue({ id: 'new', startTime: '11:00' })
+    await addTodayEvent('11:00')
+    expect(requireAdmin).not.toHaveBeenCalled()
+  })
+
+  // Security assertion mirroring tests/actions-attendance.test.ts's "always
+  // derives recordedBy from the session" test: addTodayEvent itself has no
+  // serviceDate parameter to smuggle a value through, so the actual attack
+  // surface is the Server Action boundary — a client POSTing FormData with
+  // an extra 'serviceDate' field. Assert it's silently ignored and the
+  // create payload always uses todayServiceDate()'s value.
+  it('always uses todayServiceDate() for serviceDate, ignoring a smuggled serviceDate field in the form data', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventCreate.mockResolvedValue({ id: 'new', startTime: '11:00' })
+
+    await addTodayEventAction(
+      { ok: true },
+      eventFormData({ startTime: '11:00', serviceDate: '2000-01-01' })
+    )
+
+    expect(eventCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ serviceDate: todayServiceDate() }),
+    })
+  })
+
+  it('rejects a missing startTime — ZodError, create never called', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    await expect(addTodayEvent(undefined)).rejects.toThrow(ZodError)
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed startTime — ZodError, create never called', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    await expect(addTodayEvent('9:30 AM')).rejects.toThrow(ZodError)
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('creates the service using the derived "Service - <date> <time>" name and returns a created result', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    const serviceDate = todayServiceDate()
+    const expectedName = `Service - ${formatServiceDate(serviceDate)} ${formatServiceTime('11:00')}`
+    eventCreate.mockResolvedValue({ id: 'new', name: expectedName, serviceDate, startTime: '11:00' })
+
+    const result = await addTodayEvent('11:00')
+
+    expect(eventCreate).toHaveBeenCalledWith({
+      data: { name: expectedName, serviceDate, startTime: '11:00' },
+    })
+    expect(result).toEqual({
+      status: 'created',
+      event: { id: 'new', name: expectedName, serviceDate, startTime: '11:00' },
+    })
+  })
+
+  it('returns a collision result on P2002 instead of throwing, using the serviceDate_name lookup, and never retries create', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    const serviceDate = todayServiceDate()
+    const expectedName = `Service - ${formatServiceDate(serviceDate)} ${formatServiceTime('11:00')}`
+    eventCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['serviceDate', 'name'] },
+      })
+    )
+    eventFindUnique.mockResolvedValue(collisionRow({ name: expectedName, startTime: '11:00' }))
+
+    const result = await addTodayEvent('11:00')
+
+    expect(eventFindUnique).toHaveBeenCalledWith({
+      where: { serviceDate_name: { serviceDate, name: expectedName } },
+    })
+    expect(eventCreate).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({
+      status: 'collision',
+      existing: { id: 'existing1', name: expectedName, startTime: '11:00', isArchived: false },
+    })
+  })
+
+  it('surfaces an archived existing service in the collision result rather than throwing', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['serviceDate', 'name'] },
+      })
+    )
+    eventFindUnique.mockResolvedValue(collisionRow({ isArchived: true }))
+
+    const result = await addTodayEvent('11:00')
+
+    expect(result.status).toBe('collision')
+    expect(result).toEqual(
+      expect.objectContaining({ existing: expect.objectContaining({ isArchived: true }) })
+    )
+  })
+
+  it('rethrows the original P2002 when the re-fetch after a collision finds nothing (should be unreachable)', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    const p2002 = new Prisma.PrismaClientKnownRequestError(
+      'Unique constraint failed on the fields: (`serviceDate`,`name`)',
+      { code: 'P2002', clientVersion: '6.19.3', meta: { target: ['serviceDate', 'name'] } }
+    )
+    eventCreate.mockRejectedValue(p2002)
+    eventFindUnique.mockResolvedValue(null)
+
+    await expect(addTodayEvent('11:00')).rejects.toBe(p2002)
+  })
+
+  it('propagates a non-P2002 create error unchanged', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventCreate.mockRejectedValue(new Error('connection reset'))
+    await expect(addTodayEvent('11:00')).rejects.toThrow('connection reset')
+  })
+
+  it('revalidates /dashboard and /settings when a service is created', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventCreate.mockResolvedValue({ id: 'new', startTime: '11:00' })
+    await addTodayEvent('11:00')
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+  })
+
+  it('does not revalidate anything on the collision path, since nothing was written', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['serviceDate', 'name'] },
+      })
+    )
+    eventFindUnique.mockResolvedValue(collisionRow())
+
+    await addTodayEvent('11:00')
+
+    expect(revalidatePath).not.toHaveBeenCalled()
+  })
+})
+
+describe('addNamedTodayEvent', () => {
+  it('requires a signed-in user', async () => {
+    requireUser.mockRejectedValue(new AuthzError('UNAUTHENTICATED'))
+    await expect(addNamedTodayEvent('11:00', 'Spanish Service')).rejects.toThrow(AuthzError)
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('allows a VOLUNTEER — requireAdmin is never called in this flow', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(collisionRow())
+    eventCreate.mockResolvedValue({ id: 'new' })
+    await addNamedTodayEvent('11:00', 'Spanish Service')
+    expect(requireAdmin).not.toHaveBeenCalled()
+  })
+
+  // Same reasoning as addTodayEvent's smuggling test: addNamedTodayEvent has
+  // no serviceDate parameter, so the real boundary to test is the Server
+  // Action's FormData.
+  it('always uses todayServiceDate() for serviceDate, ignoring a smuggled serviceDate field in the form data', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(collisionRow())
+    eventCreate.mockResolvedValue({ id: 'new' })
+
+    await addNamedTodayEventAction(
+      { ok: true },
+      eventFormData({ startTime: '11:00', name: 'Spanish Service', serviceDate: '2000-01-01' })
+    )
+
+    expect(eventCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ serviceDate: todayServiceDate() }),
+    })
+  })
+
+  it('creates with the supplied name verbatim (trimmed), not the derived auto name', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(collisionRow())
+    eventCreate.mockResolvedValue({ id: 'new' })
+
+    await addNamedTodayEvent('11:00', '  Spanish Service  ')
+
+    expect(eventCreate).toHaveBeenCalledWith({
+      data: { name: 'Spanish Service', serviceDate: todayServiceDate(), startTime: '11:00' },
+    })
+  })
+
+  it('rejects a blank name — ZodError, create never called', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(collisionRow())
+    await expect(addNamedTodayEvent('11:00', '   ')).rejects.toThrow(ZodError)
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a name over the length cap — ZodError, create never called', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(collisionRow())
+    await expect(addNamedTodayEvent('11:00', 'x'.repeat(81))).rejects.toThrow(ZodError)
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed startTime — ZodError, create never called', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    await expect(addNamedTodayEvent('11:00 AM', 'Spanish Service')).rejects.toThrow(ZodError)
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('refuses to create when no matching auto-named collision exists for that time', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(null)
+
+    await expect(addNamedTodayEvent('11:00', 'Spanish Service')).rejects.toThrow(
+      'There is no service at that time today to distinguish this from.'
+    )
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('lets a P2002 on the named create propagate unchanged (the wrapper maps it, not this function)', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(collisionRow())
+    eventCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['serviceDate', 'name'] },
+      })
+    )
+
+    await expect(addNamedTodayEvent('11:00', 'Spanish Service')).rejects.toMatchObject({ code: 'P2002' })
+  })
+
+  it('revalidates /dashboard and /settings on success', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(collisionRow())
+    eventCreate.mockResolvedValue({ id: 'new' })
+
+    await addNamedTodayEvent('11:00', 'Spanish Service')
+
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+  })
+})
+
+describe('addTodayEventAction', () => {
+  it('returns { ok: true, eventId } when a service is created', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventCreate.mockResolvedValue({ id: 'new1', startTime: '11:00' })
+
+    const result = await addTodayEventAction({ ok: true }, eventFormData({ startTime: '11:00' }))
+
+    expect(result).toEqual({ ok: true, eventId: 'new1' })
+  })
+
+  it('returns { ok: true, collision } with no eventId when the time collides with an existing service', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['serviceDate', 'name'] },
+      })
+    )
+    const existing = collisionRow()
+    eventFindUnique.mockResolvedValue(existing)
+
+    const result = await addTodayEventAction({ ok: true }, eventFormData({ startTime: '11:00' }))
+
+    expect(result).toEqual({
+      ok: true,
+      collision: {
+        id: existing.id,
+        name: existing.name,
+        startTime: existing.startTime,
+        isArchived: existing.isArchived,
+      },
+    })
+    expect(result.eventId).toBeUndefined()
+  })
+
+  it('returns a friendly inline message when the session is no longer authorized', async () => {
+    requireUser.mockRejectedValue(new AuthzError('UNAUTHENTICATED'))
+
+    const result = await addTodayEventAction({ ok: true }, eventFormData({ startTime: '11:00' }))
+
+    expect(result).toEqual({ ok: false, message: 'You are not authorized to do that.' })
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  // addTodayEvent parses startTimeInput as a bare value via startTimeSchema
+  // (matching getOrCreateTodayEvent's own pattern) rather than as a field of
+  // an object schema, so the resulting ZodError has no field path — same
+  // reason friendlyValidationMessage falls back to a generic label here as
+  // it would for any bare-parsed field, distinct from the addNamedTodayEvent
+  // .pick() fix which specifically preserves the `name` field's path.
+  it('returns a friendly (generic) inline message for a malformed startTime instead of throwing', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+
+    const result = await addTodayEventAction({ ok: true }, eventFormData({ startTime: '11:00 AM' }))
+
+    expect(result).toEqual({ ok: false, message: 'That field is not valid.' })
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe('addNamedTodayEventAction', () => {
+  it('returns { ok: true, eventId } on success', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(collisionRow())
+    eventCreate.mockResolvedValue({ id: 'named1' })
+
+    const result = await addNamedTodayEventAction(
+      { ok: true },
+      eventFormData({ startTime: '11:00', name: 'Spanish Service' })
+    )
+
+    expect(result).toEqual({ ok: true, eventId: 'named1' })
+  })
+
+  it('returns a friendly inline message for a duplicate name instead of crashing', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(collisionRow())
+    eventCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`serviceDate`,`name`)', {
+        code: 'P2002',
+        clientVersion: '6.19.3',
+        meta: { target: ['serviceDate', 'name'] },
+      })
+    )
+
+    const result = await addNamedTodayEventAction(
+      { ok: true },
+      eventFormData({ startTime: '11:00', name: 'Spanish Service' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'A service with that name already exists today.' })
+  })
+
+  it('returns a friendly inline message when the session is no longer authorized', async () => {
+    requireUser.mockRejectedValue(new AuthzError('FORBIDDEN'))
+
+    const result = await addNamedTodayEventAction(
+      { ok: true },
+      eventFormData({ startTime: '11:00', name: 'Spanish Service' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'You are not authorized to do that.' })
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  // Regression test for the .pick() vs .shape.name.parse() trap: .shape.name.parse()
+  // loses the field path on its ZodError, which would make friendlyValidationMessage
+  // degrade to "That field is required." instead of "Name is required."
+  it('returns exactly "Name is required." for a blank name, not a generic fallback', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(collisionRow())
+
+    const result = await addNamedTodayEventAction(
+      { ok: true },
+      eventFormData({ startTime: '11:00', name: '   ' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'Name is required.' })
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  it('rethrows the "no collision to distinguish from" guard error rather than mapping it to a friendly message', async () => {
+    requireUser.mockResolvedValue(VOLUNTEER)
+    eventFindUnique.mockResolvedValue(null)
+
+    await expect(
+      addNamedTodayEventAction(
+        { ok: true },
+        eventFormData({ startTime: '11:00', name: 'Spanish Service' })
+      )
+    ).rejects.toThrow('There is no service at that time today to distinguish this from.')
   })
 })
 

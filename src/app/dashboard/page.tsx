@@ -4,6 +4,7 @@ import { listEvents, listTodayEvents, getOrCreateTodayEvent } from '@/lib/action
 import { formatServiceDate, formatServiceTime } from '@/lib/dates'
 import { AppHeader } from '@/components/AppHeader'
 import { ServiceCard } from '@/components/ServiceCard'
+import { AddTodayServiceForm } from '@/components/AddTodayServiceForm'
 
 const startButtonStyle = {
   width: '100%',
@@ -98,6 +99,8 @@ export default async function DashboardPage() {
             ))}
           </div>
         )}
+
+        {todayEvents.length > 0 && <AddTodayServiceForm />}
 
         <ul style={{ listStyle: 'none', padding: 0, marginTop: 'var(--space-8)' }}>
           {events.map((event) => (

@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { Prisma } from '@prisma/client'
+import { Prisma, type Event } from '@prisma/client'
 import { ZodError } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, requireUser, AuthzError } from '@/lib/authz'
@@ -15,6 +15,18 @@ import {
   friendlyValidationMessage,
 } from '@/lib/validation'
 import { todayServiceDate, formatServiceDate, formatServiceTime } from '@/lib/dates'
+
+/**
+ * Same derived-name convention getOrCreateTodayEvent uses for its own
+ * zero-service create. Deliberately NOT exported: this file has `'use
+ * server'` at the top, which means Next.js requires every export to be an
+ * async Server Action — a stray synchronous export here breaks Turbopack's
+ * dev build in a way nothing else catches (see src/lib/prisma-errors.ts for
+ * why that helper lives outside this file instead of being a sibling export).
+ */
+function autoTodayEventName(serviceDate: string, startTime: string): string {
+  return `Service - ${formatServiceDate(serviceDate)} ${formatServiceTime(startTime)}`
+}
 
 export async function listEvents() {
   await requireUser()
@@ -122,6 +134,169 @@ export async function getOrCreateTodayEvent(startTimeInput?: unknown) {
     })
     if (!winner) throw error
     return winner
+  }
+}
+
+export type TodayEventCollision = {
+  id: string
+  name: string
+  startTime: string
+  isArchived: boolean
+}
+
+export type AddTodayEventResult =
+  | { status: 'created'; event: Event }
+  | { status: 'collision'; existing: TodayEventCollision }
+
+/**
+ * Lets ANY signed-in user add an ADDITIONAL service for today, once today
+ * already has at least one — the gap getOrCreateTodayEvent deliberately
+ * doesn't fill (it refuses outright once there's more than one service, by
+ * design; see its doc comment). `serviceDate` is always todayServiceDate(),
+ * never taken from input — this is a today-only operation.
+ *
+ * Two real services can legitimately land on the same clock time by
+ * coincidence, so a collision on the derived [serviceDate, name] key is NOT
+ * an error here — it's ambiguous, and only a human present can resolve it.
+ * Unlike getOrCreateTodayEvent (where the dashboard resolves ambiguity
+ * BEFORE ever calling it, by listing services first), this function can't
+ * ask the caller anything before making the write attempt — so instead of
+ * guessing whether the collision means "same service, go there" or "a
+ * second, different service happens to share a time", it returns a
+ * discriminated result and lets the UI ask the volunteer directly.
+ * addNamedTodayEvent is the continuation once they've answered "different".
+ */
+export async function addTodayEvent(startTimeInput: unknown): Promise<AddTodayEventResult> {
+  await requireUser()
+  const startTime = startTimeSchema.parse(startTimeInput)
+  const serviceDate = todayServiceDate()
+  const name = autoTodayEventName(serviceDate, startTime)
+
+  try {
+    const event = await prisma.event.create({ data: { name, serviceDate, startTime } })
+    revalidatePath('/dashboard')
+    revalidatePath('/settings')
+    return { status: 'created', event }
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error
+    // Nothing was written on this path — don't revalidate.
+    const existing = await prisma.event.findUnique({
+      where: { serviceDate_name: { serviceDate, name } },
+    })
+    // Should be unreachable (the create just failed on this exact key), but
+    // don't swallow the original error if it somehow happens.
+    if (!existing) throw error
+    return {
+      status: 'collision',
+      existing: {
+        id: existing.id,
+        name: existing.name,
+        startTime: existing.startTime,
+        isArchived: existing.isArchived,
+      },
+    }
+  }
+}
+
+/**
+ * The continuation of addTodayEvent once a human has confirmed "this is a
+ * genuinely different service" in response to a collision. Takes a
+ * caller-supplied name instead of the derived one, so two same-time services
+ * today can coexist under distinct names.
+ *
+ * The server-side re-check below (that a matching auto-named collision
+ * actually exists) is deliberate, not defensive filler: without it, this
+ * function would let a free-text name be created for ANY startTime, with no
+ * real collision behind it — reopening exactly the "two plausible same-time
+ * services" ambiguity the auto-naming rule exists to prevent, reachable by
+ * calling this Server Action directly instead of through the UI's collision
+ * step.
+ */
+export async function addNamedTodayEvent(startTimeInput: unknown, nameInput: unknown) {
+  await requireUser()
+  const startTime = startTimeSchema.parse(startTimeInput)
+  const { name } = createEventSchema.pick({ name: true }).parse({ name: nameInput })
+  const serviceDate = todayServiceDate()
+
+  const collision = await prisma.event.findUnique({
+    where: { serviceDate_name: { serviceDate, name: autoTodayEventName(serviceDate, startTime) } },
+  })
+  if (!collision) {
+    throw new Error('There is no service at that time today to distinguish this from.')
+  }
+
+  const event = await prisma.event.create({ data: { name, serviceDate, startTime } })
+  revalidatePath('/dashboard')
+  revalidatePath('/settings')
+  return event
+}
+
+export type AddTodayEventFormState = {
+  ok: boolean
+  message?: string
+  eventId?: string
+  collision?: TodayEventCollision
+}
+
+/**
+ * useActionState-compatible wrapper around addTodayEvent(). No P2002 branch
+ * here (unlike addNamedTodayEventAction below) — a collision on this path is
+ * never an error, it's already surfaced as the `collision` result the UI
+ * asks the volunteer about.
+ */
+export async function addTodayEventAction(
+  _prevState: AddTodayEventFormState,
+  formData: FormData
+): Promise<AddTodayEventFormState> {
+  try {
+    const result = await addTodayEvent(formData.get('startTime'))
+    if (result.status === 'collision') {
+      return { ok: true, collision: result.existing }
+    }
+    return { ok: true, eventId: result.event.id }
+  } catch (error) {
+    if (error instanceof AuthzError) {
+      return { ok: false, message: 'You are not authorized to do that.' }
+    }
+    if (error instanceof ZodError) {
+      return { ok: false, message: friendlyValidationMessage(error) }
+    }
+    throw error
+  }
+}
+
+/**
+ * useActionState-compatible wrapper around addNamedTodayEvent(). Unlike
+ * addTodayEventAction, this one DOES need a P2002 branch: the plain path's
+ * collision is consumed by addTodayEvent's discriminated result before it
+ * can ever reach a P2002 here, but a duplicate on the *named* path is a
+ * plain human mistake (typing the same distinguishing name twice) with no
+ * fork to offer — so it maps to a friendly inline message like every other
+ * P2002 in this file.
+ *
+ * The "no collision to distinguish from" guard error is deliberately NOT
+ * caught here — it rethrows to the app's error boundary, since no legitimate
+ * UI flow can trigger it (the naming form only ever appears after a real
+ * collision was already surfaced).
+ */
+export async function addNamedTodayEventAction(
+  _prevState: AddTodayEventFormState,
+  formData: FormData
+): Promise<AddTodayEventFormState> {
+  try {
+    const event = await addNamedTodayEvent(formData.get('startTime'), formData.get('name'))
+    return { ok: true, eventId: event.id }
+  } catch (error) {
+    if (error instanceof AuthzError) {
+      return { ok: false, message: 'You are not authorized to do that.' }
+    }
+    if (error instanceof ZodError) {
+      return { ok: false, message: friendlyValidationMessage(error) }
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return { ok: false, message: 'A service with that name already exists today.' }
+    }
+    throw error
   }
 }
 
