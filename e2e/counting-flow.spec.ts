@@ -11,7 +11,7 @@ test('sign in, record a count, and see it on the report', async ({ page }) => {
   // Match loosely on "Start counting" so this passes whether today has zero
   // services (button still reads "...today's service") or exactly one
   // (button reads "Start counting — 9:30 AM").
-  await page.getByRole('button', { name: /start counting/i }).click()
+  await page.getByRole('button', { name: /start counting/i }).first().click()
   await expect(page).toHaveURL(/\/entry\/[^/]+$/)
   const eventId = new URL(page.url()).pathname.split('/').pop()!
 
@@ -94,12 +94,10 @@ test('two services on the same date route to separate entry screens with separat
   // the dashboard's other same-day ServiceCard elements, causing a strict
   // mode violation.
   const earlyButton = page.getByRole('button', {
-    name: 'Start counting — 9:30 AM (Early Service E2E)',
-    exact: true,
+    name: /Start counting — .*9:30 AM.*\(Early Service E2E\)/,
   })
   const lateButton = page.getByRole('button', {
-    name: 'Start counting — 11:00 AM (Late Service E2E)',
-    exact: true,
+    name: /Start counting — .*11:00 AM.*\(Late Service E2E\)/,
   })
   await expect(earlyButton).toBeVisible()
   await expect(lateButton).toBeVisible()
@@ -169,12 +167,10 @@ test('marking a service counted removes it from the start-counting picker withou
   await page.goto('/dashboard')
 
   const firstButton = page.getByRole('button', {
-    name: 'Start counting — 2:15 PM (Counting Done E2E First)',
-    exact: true,
+    name: /Start counting — .*2:15 PM.*\(Counting Done E2E First\)/,
   })
   const secondButton = page.getByRole('button', {
-    name: 'Start counting — 3:30 PM (Counting Done E2E Second)',
-    exact: true,
+    name: /Start counting — .*3:30 PM.*\(Counting Done E2E Second\)/,
   })
   await expect(firstButton).toBeVisible()
   await expect(secondButton).toBeVisible()

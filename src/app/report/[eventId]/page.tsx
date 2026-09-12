@@ -19,39 +19,55 @@ export default async function ReportPage({ params }: { params: Promise<{ eventId
     <>
       <AppHeader helpAnchor="reports" />
       <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <h1 style={{ fontSize: 'var(--text-xl)', marginBottom: 0 }}>{event.name}</h1>
-            <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>
-              {formatServiceDate(event.serviceDate)} · {formatServiceTime(event.startTime)}
-            </p>
-            <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>
-              Speakers: {speakers.length > 0 ? speakers.map((speaker) => speaker.name).join(', ') : '—'}
-            </p>
-            <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>
-              Counts entered by: {recordedByNames.length > 0 ? recordedByNames.join(', ') : '—'}
-            </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+            <h1 style={{ fontSize: 'var(--text-xl)', margin: 0, flex: '1 1 min-content' }}>{event.name}</h1>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              {user.role === 'ADMIN' && (
+                <>
+                  <Link
+                    href={`/report/${eventId}/manage`}
+                    className="button no-print"
+                    style={{ padding: '0 var(--space-4)', whiteSpace: 'nowrap' }}
+                  >
+                    Manage Records
+                  </Link>
+                  <a
+                    href={`/api/export?eventId=${eventId}`}
+                    className="button no-print"
+                    style={{ padding: '0 var(--space-4)', whiteSpace: 'nowrap' }}
+                  >
+                    Download CSV
+                  </a>
+                </>
+              )}
+              <PrintButton />
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-            {user.role === 'ADMIN' && (
-              <>
-                <Link
-                  href={`/report/${eventId}/manage`}
-                  className="button no-print"
-                  style={{ padding: '0 var(--space-4)' }}
-                >
-                  Manage Records
-                </Link>
-                <a
-                  href={`/api/export?eventId=${eventId}`}
-                  className="button no-print"
-                  style={{ padding: '0 var(--space-4)' }}
-                >
-                  Download CSV
-                </a>
-              </>
-            )}
-            <PrintButton />
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'max-content 1fr',
+              gap: 'var(--space-2) var(--space-4)',
+              color: 'var(--color-text-muted)',
+              fontSize: 'var(--text-sm)',
+              background: 'var(--color-surface)',
+              padding: 'var(--space-4)',
+              borderRadius: 'var(--radius)',
+              border: '1px solid var(--color-border)',
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>Date</div>
+            <div>
+              {formatServiceDate(event.serviceDate)} · {formatServiceTime(event.startTime)}
+            </div>
+
+            <div style={{ fontWeight: 600 }}>Speakers</div>
+            <div>{speakers.length > 0 ? speakers.map((speaker) => speaker.name).join(', ') : '—'}</div>
+
+            <div style={{ fontWeight: 600 }}>Recorded by</div>
+            <div>{recordedByNames.length > 0 ? recordedByNames.join(', ') : '—'}</div>
           </div>
         </div>
 
