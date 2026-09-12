@@ -144,9 +144,17 @@ export function AddServiceForm({
             service, so a time default is almost certainly wrong. */}
         <input name="startTime" type="time" required style={{ padding: 'var(--space-3)' }} />
         {pickedDate !== defaultServiceDate && (
-          <p role="status" style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-            {`This will create a service for ${formatServiceDate(pickedDate)} — not today.`}
-          </p>
+          <div role="status" style={{
+            margin: 0,
+            padding: 'var(--space-3)',
+            background: 'var(--color-surface-raised)',
+            borderRadius: 'var(--radius)',
+            borderLeft: '4px solid var(--color-accent)',
+            fontSize: 'var(--text-sm)',
+            color: 'var(--color-text)'
+          }}>
+            This will create a service for <strong>{formatServiceDate(pickedDate)}</strong> — not today.
+          </div>
         )}
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
           <button type="submit" disabled={busy}>{busy ? 'Adding…' : 'Add service'}</button>
