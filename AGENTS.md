@@ -359,3 +359,8 @@ This application is primarily used by volunteers on mobile devices (often in dim
 
 ### 4. Testing Semantic Roles
 - When writing E2E tests in Playwright, **always** select elements by their semantic role (e.g., `page.getByRole('button', { name: 'Save' })` or `page.getByRole('link', { name: 'Dashboard' })`). This inherently verifies that the correct HTML element was used. If a developer accidentally uses a `<Link>` for a submit action, `getByRole('button')` will fail, catching the error automatically.
+
+### 5. Alerts and Status Messages
+- **Errors**: Always use `<p role="alert" className="alert-error">` for error messages (e.g., validation failures, network errors). It provides a standardized magenta callout box.
+- **Warnings/Information**: Use `<div role="status" className="alert-warning">` for non-critical warnings or status callouts. It provides a standardized orange callout box.
+- **Placement**: When placing alerts near form actions, **always render the alert *above* the action buttons**, not below them, so they are not hidden by mobile keyboards.
