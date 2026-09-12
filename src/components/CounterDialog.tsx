@@ -94,7 +94,7 @@ export function CounterDialog({
         {status === 'error' && (
           <p
             role="alert"
-            style={{ color: 'var(--color-danger)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+            className="alert-error"
           >
             <span aria-hidden="true">⚠</span>
             Could not save — your count is still here. Check your signal and tap Save again.

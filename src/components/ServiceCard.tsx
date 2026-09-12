@@ -151,7 +151,8 @@ export function ServiceCard({
       </div>
 
       {toggleError && (
-        <p role="alert" style={{ color: 'var(--color-danger)', margin: 0, marginTop: 'var(--space-2)' }}>
+        <p role="alert" className="alert-error" style={{ marginTop: 'var(--space-2)' }}>
+          <span aria-hidden="true">⚠</span>
           {toggleError}
         </p>
       )}
@@ -165,7 +166,7 @@ export function ServiceCard({
           {status === 'error' && (
             <div
               role="alert"
-              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-danger)' }}
+              className="alert-error"
             >
               <span aria-hidden="true">⚠</span>
               <span>Could not load counts.</span>

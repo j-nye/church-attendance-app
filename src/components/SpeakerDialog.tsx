@@ -114,10 +114,8 @@ export function SpeakerDialog({
         {status === 'error' && (
           <p
             role="alert"
-            style={{
-              color: 'var(--color-danger)', display: 'flex', alignItems: 'center',
-              gap: 'var(--space-2)', marginTop: 'var(--space-3)',
-            }}
+            className="alert-error"
+            style={{ marginTop: 'var(--space-3)' }}
           >
             <span aria-hidden="true">⚠</span>
             Could not save — check your signal and try again.

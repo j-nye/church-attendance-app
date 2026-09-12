@@ -18,13 +18,7 @@ type Mode =
   | { kind: 'collision'; serviceDate: string; startTime: string; existing: ServiceCollision }
   | { kind: 'naming'; serviceDate: string; startTime: string; existing: ServiceCollision }
 
-const alertStyle = {
-  color: 'var(--color-danger)',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 'var(--space-2)',
-  margin: 0,
-} as const
+
 
 /**
  * Lets a signed-in volunteer (not just an admin) add an additional service —
@@ -144,15 +138,7 @@ export function AddServiceForm({
             service, so a time default is almost certainly wrong. */}
         <input name="startTime" type="time" required style={{ padding: 'var(--space-3)' }} />
         {pickedDate !== defaultServiceDate && (
-          <div role="status" style={{
-            margin: 0,
-            padding: 'var(--space-3)',
-            background: 'var(--color-danger-bg)',
-            borderRadius: 'var(--radius)',
-            borderLeft: '4px solid var(--color-danger)',
-            fontSize: 'var(--text-sm)',
-            color: 'var(--color-text)'
-          }}>
+          <div role="status" className="alert-warning">
             This will create a service for <strong>{formatServiceDate(pickedDate)}</strong> — not today.
           </div>
         )}
@@ -161,7 +147,7 @@ export function AddServiceForm({
           <button type="button" onClick={reset} disabled={busy}>Cancel</button>
         </div>
         {error && (
-          <p role="alert" style={alertStyle}>
+          <p role="alert" className="alert-error">
             <span aria-hidden="true">⚠</span>
             {error}
           </p>
@@ -213,7 +199,7 @@ export function AddServiceForm({
           <button type="button" onClick={reset}>Cancel</button>
         </div>
         {error && (
-          <p role="alert" style={alertStyle}>
+          <p role="alert" className="alert-error">
             <span aria-hidden="true">⚠</span>
             {error}
           </p>
@@ -256,7 +242,7 @@ export function AddServiceForm({
         </button>
       </div>
       {error && (
-        <p role="alert" style={alertStyle}>
+        <p role="alert" className="alert-error">
           <span aria-hidden="true">⚠</span>
           {error}
         </p>

@@ -171,7 +171,12 @@ function ServiceRow({ service }: { service: ServiceRowData }) {
         <EditScheduleForm service={service} onDone={() => setEditing(false)} />
       )}
 
-      {error && <p role="alert" style={{ color: 'var(--color-danger)', margin: 0, width: '100%' }}>{error}</p>}
+      {error && (
+        <p role="alert" className="alert-error" style={{ width: '100%' }}>
+          <span aria-hidden="true">⚠</span>
+          {error}
+        </p>
+      )}
 
       {confirming && (
         <ConfirmDialog

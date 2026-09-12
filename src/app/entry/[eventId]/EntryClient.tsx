@@ -153,7 +153,7 @@ export function EntryClient({
           {toggleBusy ? 'Updating…' : isCountingDone ? 'Reopen counting' : 'Mark counting done'}
         </button>
         {toggleError && (
-          <p role="alert" style={{ color: 'var(--color-danger)', margin: 0, marginTop: 'var(--space-2)' }}>
+          <p role="alert" className="alert-error" style={{ marginTop: 'var(--space-2)' }}>
             {toggleError}
           </p>
         )}
