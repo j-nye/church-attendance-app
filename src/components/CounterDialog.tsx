@@ -46,10 +46,12 @@ export function CounterDialog({
   const [status, setStatus] = useState<Status>('idle')
 
   function bump(delta: number) {
-    const next = Math.max(0, count + delta)
-    setCount(next)
-    // Survive a refresh, a backgrounded tab, or a dead battery mid-count.
-    window.localStorage.setItem(draftKey, String(next))
+    setCount((prev) => {
+      const next = Math.max(0, prev + delta)
+      // Survive a refresh, a backgrounded tab, or a dead battery mid-count.
+      window.localStorage.setItem(draftKey, String(next))
+      return next
+    })
   }
 
   async function save() {

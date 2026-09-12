@@ -74,6 +74,7 @@ export async function getEventSummary(eventId: string) {
         include: { category: true },
         orderBy: [{ category: { sortOrder: 'asc' } }, { category: { name: 'asc' } }],
       },
+      speakers: true,
     },
   })
   if (!event) throw new Error('No such service')
@@ -130,7 +131,7 @@ export async function getEventSummary(eventId: string) {
   // ministry metric like Salvations must never inflate attendance.
   const grand = event.records
     .filter((record) => record.category.countsTowardTotal)
-    .reduce((sum, record) => sum + record.count, 0)
+    .reduce((sum, record) => sum + record.count, 0) + (event.speakers?.length || 0)
 
   return {
     event: { id: event.id, name: event.name, serviceDate: event.serviceDate, startTime: event.startTime },
@@ -141,6 +142,7 @@ export async function getEventSummary(eventId: string) {
       classrooms: totalBy('CLASSROOM'),
       growthTrack: totalBy('GROWTH_TRACK'),
       serveTeams: totalBy('SERVE_TEAM'),
+      speakers: event.speakers?.length || 0,
       grand,
     },
   }
@@ -238,8 +240,8 @@ export async function getExportRows(eventIds: string[]): Promise<ExportRow[]> {
       categoryType: 'SPEAKER',
       group: 'Stage',
       categoryName: speaker.name,
-      count: '',
-      countsTowardTotal: false,
+      count: 1,
+      countsTowardTotal: true,
       recordedBy: speaker.recordedBy,
       recordedByName: nameFor(speaker.recordedBy),
     }))

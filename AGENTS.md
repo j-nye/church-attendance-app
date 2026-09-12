@@ -4,21 +4,11 @@ This document encodes the project's conventions, tech decisions, and gotchas. Ag
 
 <!-- BEGIN:nextjs-agent-rules -->
 
-## Next.js 16.3.0 + React 19.2.8 (Bleeding Edge)
+# This is NOT the Next.js you know
 
-This codebase uses Next.js 16.3.0 and React 19.2.8 — both with **breaking changes** from earlier versions. Your training data is stale here.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 
-**Before writing any code, read:**
-- `node_modules/next/dist/docs/` for Next.js 16.3.0 API changes
-- React 19 upgrade guide for hook/API changes
-- next-auth v5.0.0-beta.32 migration guide (we're on beta, not stable)
-
-**Key breaking changes:**
-- React 19 compiler optimizes memoization automatically — manual `useMemo`/`useCallback` is now often worse, not better
-- Next.js 16 has new routing and data-fetching patterns
-- next-auth v5-beta has breaking API changes from v4
-
-Do NOT apply optimization rules from older documentation. Test locally.
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
 
