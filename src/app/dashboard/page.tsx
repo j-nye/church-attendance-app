@@ -27,11 +27,40 @@ export default async function DashboardPage() {
           {user.role === 'ADMIN' && <Link href="/settings">Settings</Link>}
         </header>
 
-        {todayEvents.length <= 1 ? (
-          // 0 services: getOrCreateTodayEvent creates one on the fly. Exactly
-          // 1: it's unambiguous, so the button can still start it directly —
-          // labelled with its time so the volunteer confirms it's the right
-          // one before tapping.
+        {todayEvents.length === 0 ? (
+          // 0 services: getOrCreateTodayEvent creates one on the fly. There's
+          // no more silent server-side default time — the volunteer sets it
+          // here (defaulting to the common 09:30 case), and it's validated
+          // through startTimeSchema exactly like every other startTime in
+          // this app. See getOrCreateTodayEvent's doc comment.
+          <form
+            action={async (formData: FormData) => {
+              'use server'
+              const { redirect } = await import('next/navigation')
+              const event = await getOrCreateTodayEvent(formData.get('startTime'))
+              redirect(`/entry/${event.id}`)
+            }}
+            style={{ display: 'grid', gap: 'var(--space-3)' }}
+          >
+            <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
+              {"Set the start time for today's service:"}
+            </p>
+            <input
+              name="startTime"
+              type="time"
+              defaultValue="09:30"
+              required
+              style={{ padding: 'var(--space-3)' }}
+            />
+            <button type="submit" style={startButtonStyle}>
+              {"Start counting today's service"}
+            </button>
+          </form>
+        ) : todayEvents.length === 1 ? (
+          // Exactly 1: it's unambiguous, so the button can still start it
+          // directly — labelled with its time so the volunteer confirms it's
+          // the right one before tapping. No time input here: the service
+          // already exists, so there's nothing to choose.
           <form
             action={async () => {
               'use server'
@@ -41,9 +70,7 @@ export default async function DashboardPage() {
             }}
           >
             <button type="submit" style={startButtonStyle}>
-              {todayEvents.length === 1
-                ? `Start counting — ${formatServiceTime(todayEvents[0].startTime)}`
-                : "Start counting today's service"}
+              {`Start counting — ${formatServiceTime(todayEvents[0].startTime)}`}
             </button>
           </form>
         ) : (

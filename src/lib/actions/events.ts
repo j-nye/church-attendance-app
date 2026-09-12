@@ -9,6 +9,7 @@ import { isUniqueConstraintError } from '@/lib/prisma-errors'
 import {
   createEventSchema,
   serviceDateSchema,
+  startTimeSchema,
   updateEventScheduleSchema,
   idSchema,
   friendlyValidationMessage,
@@ -59,11 +60,6 @@ export async function listTodayEvents() {
   })
 }
 
-/** Default start time stamped on an auto-created "today" service when no
- * admin has set one up yet. Matches the backfill default for pre-existing
- * rows (see the Task 1.1 migration). */
-const DEFAULT_SERVICE_START_TIME = '09:30'
-
 /**
  * Volunteers can start counting even if no admin pre-created today's service
  * — but ONLY when there is exactly zero or one service today. Without the
@@ -79,8 +75,18 @@ const DEFAULT_SERVICE_START_TIME = '09:30'
  * a second service existed, then tapped after). A loud throw is correct
  * there — a discriminated union would just invite a caller to handle a case
  * the UI is supposed to have already resolved.
+ *
+ * `startTimeInput` is only read on the zero-service (create) path, and only
+ * parsed there — via `startTimeSchema`, the same schema every other
+ * startTime in this app goes through. There is deliberately no server-side
+ * default any more: a missing or malformed value throws a ZodError instead
+ * of silently stamping a hardcoded time nobody chose. (A `'09:30'`
+ * `defaultValue` still lives in the dashboard's zero-service form — that's a
+ * UI convenience for the common case, not a guarantee this function makes.)
+ * The one-service branch returns the existing row untouched and never looks
+ * at `startTimeInput` — a caller in that branch doesn't need to supply one.
  */
-export async function getOrCreateTodayEvent() {
+export async function getOrCreateTodayEvent(startTimeInput?: unknown) {
   await requireUser()
   const serviceDate = todayServiceDate()
 
@@ -95,7 +101,8 @@ export async function getOrCreateTodayEvent() {
   }
   if (existing.length === 1) return existing[0]
 
-  const startTime = DEFAULT_SERVICE_START_TIME
+  // Only reached when we're actually about to create — see doc comment.
+  const startTime = startTimeSchema.parse(startTimeInput)
   const name = `Service - ${formatServiceDate(serviceDate)} ${formatServiceTime(startTime)}`
 
   try {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Prisma } from '@prisma/client'
+import { ZodError } from 'zod'
 
 const requireAdmin = vi.fn()
 const requireUser = vi.fn()
@@ -196,16 +197,52 @@ describe('getOrCreateTodayEvent', () => {
     expect(eventCreate).not.toHaveBeenCalled()
   })
 
-  it('creates a new event for today, stamped with the default startTime, when none exists', async () => {
+  // CHANGED CONTRACT: getOrCreateTodayEvent no longer stamps a hardcoded
+  // '09:30' default when creating — the caller must supply a startTime,
+  // which is parsed through startTimeSchema. This test now asserts the
+  // create call uses whatever startTime was passed in, not a fixed value.
+  it('creates a new event for today using the startTime the caller passed in, when none exists', async () => {
     requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
     eventFindMany.mockResolvedValue([])
-    eventCreate.mockResolvedValue({ id: 'new' })
-    const result = await getOrCreateTodayEvent()
-    expect(result).toEqual({ id: 'new' })
+    eventCreate.mockResolvedValue({ id: 'new', startTime: '09:30' })
+    const result = await getOrCreateTodayEvent('09:30')
+    expect(result).toEqual({ id: 'new', startTime: '09:30' })
     expect(eventCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({ startTime: '09:30' }),
     })
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+  })
+
+  // NEW COVERAGE: a non-default time chosen by whoever is creating the
+  // service must be honored end to end, not just the common 09:30 case.
+  it('honors a custom startTime end to end when creating', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindMany.mockResolvedValue([])
+    eventCreate.mockResolvedValue({ id: 'new', startTime: '11:15' })
+    const result = await getOrCreateTodayEvent('11:15')
+    expect(result).toEqual({ id: 'new', startTime: '11:15' })
+    expect(eventCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ startTime: '11:15' }),
+    })
+  })
+
+  // NEW COVERAGE: the whole point of this change is that there is no more
+  // invisible default — an omitted startTime on the create path must throw
+  // rather than silently falling back to a hardcoded time.
+  it('throws a validation error instead of silently defaulting when no startTime is given for a create', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindMany.mockResolvedValue([])
+    await expect(getOrCreateTodayEvent()).rejects.toThrow(ZodError)
+    expect(eventCreate).not.toHaveBeenCalled()
+  })
+
+  // NEW COVERAGE: same guarantee, but for a present-but-malformed value
+  // rather than a missing one.
+  it('throws a validation error for a malformed startTime when creating', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindMany.mockResolvedValue([])
+    await expect(getOrCreateTodayEvent('9:30 AM')).rejects.toThrow(ZodError)
+    expect(eventCreate).not.toHaveBeenCalled()
   })
 
   it('throws before ever calling create when today already has more than one service', async () => {
@@ -216,6 +253,10 @@ describe('getOrCreateTodayEvent', () => {
     expect(eventCreate).not.toHaveBeenCalled()
   })
 
+  // Now that a create is involved, this test exercises the create path, so
+  // it needs a valid startTime argument — without one, parsing would throw
+  // a ZodError before ever reaching eventCreate, which is not what this
+  // test is checking.
   it('re-fetches and returns the winner\'s row when create loses a concurrent-tap race (P2002)', async () => {
     requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
     eventFindMany.mockResolvedValue([]) // initial check finds nothing
@@ -228,7 +269,7 @@ describe('getOrCreateTodayEvent', () => {
       })
     )
 
-    const result = await getOrCreateTodayEvent()
+    const result = await getOrCreateTodayEvent('09:30')
 
     expect(result).toEqual({ id: 'winner' })
     expect(eventFindFirst).toHaveBeenCalledWith(
@@ -236,12 +277,16 @@ describe('getOrCreateTodayEvent', () => {
     )
   })
 
+  // Same reasoning: this also exercises the create path (eventFindMany
+  // resolves to []), so it needs a valid startTime or it would fail for the
+  // wrong reason (a ZodError, not the 'connection reset' error it's meant
+  // to check propagates unchanged).
   it('still throws a non-P2002 error from create', async () => {
     requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
     eventFindMany.mockResolvedValue([])
     eventCreate.mockRejectedValue(new Error('connection reset'))
 
-    await expect(getOrCreateTodayEvent()).rejects.toThrow('connection reset')
+    await expect(getOrCreateTodayEvent('09:30')).rejects.toThrow('connection reset')
   })
 })
 

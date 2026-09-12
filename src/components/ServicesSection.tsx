@@ -22,7 +22,10 @@ export type ServiceRowData = {
 const initialState: EventFormState = { ok: true }
 
 /** Matches the backfill default for pre-existing rows (see the Task 1.1
- * migration) and getOrCreateTodayEvent's DEFAULT_SERVICE_START_TIME. */
+ * migration). This is purely this form's own `defaultValue` convenience —
+ * getOrCreateTodayEvent has no server-side default of its own any more; the
+ * dashboard's zero-service form supplies its own explicit startTime the same
+ * way (see src/app/dashboard/page.tsx). */
 const DEFAULT_START_TIME = '09:30'
 
 function CreateServiceForm({ defaultServiceDate }: { defaultServiceDate: string }) {
