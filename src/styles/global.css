@@ -13,7 +13,7 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-button {
+button, .button {
   font: inherit;
   min-height: var(--tap-target);
   min-width: var(--tap-target);
@@ -23,10 +23,14 @@ button {
   color: var(--color-text);
   cursor: pointer;
   transition: background var(--transition), transform var(--transition);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-button:hover { background: var(--color-border); }
-button:active { transform: scale(0.97); }
+button:hover, .button:hover { background: var(--color-border); }
+button:active, .button:active { transform: scale(0.97); }
 
 :focus-visible {
   outline: 3px solid var(--color-accent);

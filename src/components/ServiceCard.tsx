@@ -140,9 +140,9 @@ export function ServiceCard({
         </div>
       </button>
 
-      <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', alignItems: 'center' }}>
-        <Link href={`/entry/${id}`}>Enter counts</Link>
-        <Link href={`/report/${id}`}>Summary</Link>
+      <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <Link href={`/entry/${id}`} className="button" style={{ padding: '0 var(--space-4)' }}>Enter counts</Link>
+        <Link href={`/report/${id}`} className="button" style={{ padding: '0 var(--space-4)' }}>Summary</Link>
         {canToggleCounting && (
           <button type="button" onClick={toggleCountingDone} disabled={toggleBusy}>
             {toggleBusy ? 'Updating…' : done ? 'Reopen counting' : 'Mark counting done'}

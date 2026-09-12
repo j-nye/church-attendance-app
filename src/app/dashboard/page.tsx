@@ -38,7 +38,7 @@ export default async function DashboardPage() {
       <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h1 style={{ fontSize: 'var(--text-xl)' }}>Services</h1>
-          {user.role === 'ADMIN' && <Link href="/settings">Settings</Link>}
+          {user.role === 'ADMIN' && <Link href="/settings" className="button" style={{ padding: '0 var(--space-4)' }}>Settings</Link>}
         </header>
 
         {todayEvents.length === 0 ? (

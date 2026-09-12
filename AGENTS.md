@@ -339,3 +339,23 @@ If something can only be verified in production, that is a gap to close, not a r
 - [ ] If your change touched the schema, the real-database tests (`tests/prisma-schema.test.ts`, `tests/auth.test.ts`) ran and passed — mocked tests can't see a migration
 - [ ] If you touch auth or counts, write an e2e test
 - [ ] Verified in the development environment — local suite, then a Vercel Preview deploy against the dev database — **before** anything merges to `main` and ships to production
+
+## UI & Styling (Mobile-First)
+
+This application is primarily used by volunteers on mobile devices (often in dim rooms). All UI decisions must prioritize large touch targets and unambiguous interactive elements over dense, information-heavy layouts.
+
+### 1. Semantic Elements: Buttons vs. Links
+- **`<button>`**: Use for ANY action that mutates data, submits a form, opens a modal/dialog, or changes the state of the current page. Never use a link for an action.
+- **`<Link>`**: Use strictly for navigating to a new URL or route (e.g., `/settings`, `/entry/[id]`). 
+
+### 2. Visual Hierarchy and Touch Targets
+- **Minimum Tap Target**: Interactive elements must respect the CSS variable `--tap-target: 44px` (defined in `tokens.css`). `<button>` tags automatically inherit this via `global.css`.
+- **Primary Navigational Actions**: If a `<Link>` is the primary call-to-action on a page (e.g., "Go to Settings" or "Start Counting"), it should not look like inline blue text. It must be visually styled as a button using a shared CSS class or inline variables (e.g., `background: var(--color-accent)`, `padding: var(--space-4)`) so it is large and tappable.
+- **Avoiding Text Links**: Because text links are hard to tap on mobile, prefer wrapping links in block-level elements or applying button-like padding (e.g., `padding: var(--space-3)`) even for secondary navigation.
+
+### 3. Styling Guidelines
+- The project does not use Tailwind. Use the CSS variables defined in `src/styles/tokens.css` (e.g., `var(--color-accent)`, `var(--space-4)`).
+- Buttons and button-like links should have `border-radius: var(--radius)` and appropriate contrast (e.g., `color: var(--color-accent-contrast)` against an accent background).
+
+### 4. Testing Semantic Roles
+- When writing E2E tests in Playwright, **always** select elements by their semantic role (e.g., `page.getByRole('button', { name: 'Save' })` or `page.getByRole('link', { name: 'Dashboard' })`). This inherently verifies that the correct HTML element was used. If a developer accidentally uses a `<Link>` for a submit action, `getByRole('button')` will fail, catching the error automatically.
