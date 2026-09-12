@@ -142,16 +142,16 @@ export function AddServiceForm({
             This will create a service for <strong>{formatServiceDate(pickedDate)}</strong> — not today.
           </div>
         )}
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <button type="submit" disabled={busy}>{busy ? 'Adding…' : 'Add service'}</button>
-          <button type="button" onClick={reset} disabled={busy}>Cancel</button>
-        </div>
         {error && (
           <p role="alert" className="alert-error">
             <span aria-hidden="true">⚠</span>
             {error}
           </p>
         )}
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <button type="submit" disabled={busy}>{busy ? 'Adding…' : 'Add service'}</button>
+          <button type="button" onClick={reset} disabled={busy}>Cancel</button>
+        </div>
       </form>
     )
   }
@@ -182,6 +182,12 @@ export function AddServiceForm({
               : `There's already a service at ${time} on ${dateLabel}: ${existing.name}. Is this the same service, or a different one?`}
           </p>
         )}
+        {error && (
+          <p role="alert" className="alert-error">
+            <span aria-hidden="true">⚠</span>
+            {error}
+          </p>
+        )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
           {!existing.isArchived && (
             <button type="button" onClick={() => router.push(`/entry/${existing.id}`)}>
@@ -198,12 +204,6 @@ export function AddServiceForm({
           </button>
           <button type="button" onClick={reset}>Cancel</button>
         </div>
-        {error && (
-          <p role="alert" className="alert-error">
-            <span aria-hidden="true">⚠</span>
-            {error}
-          </p>
-        )}
       </div>
     )
   }
@@ -229,6 +229,12 @@ export function AddServiceForm({
       <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
         This name will appear on the dashboard, the report, and the CSV export.
       </p>
+      {error && (
+        <p role="alert" className="alert-error">
+          <span aria-hidden="true">⚠</span>
+          {error}
+        </p>
+      )}
       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
         <button type="submit" disabled={busy}>{busy ? 'Adding…' : 'Add service'}</button>
         <button
@@ -241,12 +247,6 @@ export function AddServiceForm({
           Back
         </button>
       </div>
-      {error && (
-        <p role="alert" className="alert-error">
-          <span aria-hidden="true">⚠</span>
-          {error}
-        </p>
-      )}
     </form>
   )
 }
