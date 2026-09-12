@@ -55,6 +55,13 @@ model Event {
   /// Existing rows were backfilled to '09:30' when this column was added.
   startTime   String
   isArchived  Boolean            @default(false)
+  /// Counting for this service is finished, so the dashboard stops offering it
+  /// as a service to *start* counting. Deliberately NOT a gate and NOT a
+  /// lighter archive: a done service still accepts new and corrected counts
+  /// exactly like any other non-archived one — saveCount checks isArchived
+  /// only, never this. Orthogonal to isArchived; either, both, or neither.
+  /// Any signed-in user may set and clear it (see markCountingDone).
+  isCountingDone Boolean @default(false)
   createdAt   DateTime           @default(now())
   records     AttendanceRecord[]
   speakers    ServiceSpeaker[]

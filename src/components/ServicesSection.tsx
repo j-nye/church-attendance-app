@@ -17,6 +17,7 @@ export type ServiceRowData = {
   serviceDate: string
   startTime: string
   isArchived: boolean
+  isCountingDone: boolean
 }
 
 const initialState: EventFormState = { ok: true }
@@ -147,6 +148,7 @@ function ServiceRow({ service }: { service: ServiceRowData }) {
         {service.name}{' '}
         <small style={{ color: 'var(--color-text-muted)' }}>
           ({formatServiceDate(service.serviceDate)} · {formatServiceTime(service.startTime)}
+          {service.isCountingDone ? ', counted' : ''}
           {service.isArchived ? ', archived' : ''})
         </small>
       </span>

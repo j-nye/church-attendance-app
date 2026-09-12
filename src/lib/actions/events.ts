@@ -88,6 +88,24 @@ export async function listTodayEvents() {
  * there — a discriminated union would just invite a caller to handle a case
  * the UI is supposed to have already resolved.
  *
+ * The dashboard now only calls this function in the genuinely-zero-services
+ * case (see src/app/dashboard/page.tsx's `pending` partition) — once a done
+ * service (isCountingDone) exists alongside a pending one, the dashboard
+ * routes directly to the pending service's known id instead of calling this
+ * function, precisely because this function's own queries below stay
+ * unfiltered on isCountingDone (see next paragraph) and would otherwise
+ * throw a spurious ">1 services" error for what the volunteer sees as one
+ * remaining service to start. A done service does not change this
+ * function's own behavior at all.
+ *
+ * This function's `findMany`/P2002-recovery `findFirst` queries are
+ * deliberately NOT filtered on isCountingDone — they answer "does today have
+ * a live (non-archived) service at all", and marking a service done doesn't
+ * remove it from that universe. Filtering here would let a done service
+ * become invisible to this "any live service today" check while the
+ * dashboard's zero-service branch is what decides to call this function in
+ * the first place — see src/app/dashboard/page.tsx for the full reasoning.
+ *
  * `startTimeInput` is only read on the zero-service (create) path, and only
  * parsed there — via `startTimeSchema`, the same schema every other
  * startTime in this app goes through. There is deliberately no server-side
@@ -142,6 +160,7 @@ export type TodayEventCollision = {
   name: string
   startTime: string
   isArchived: boolean
+  isCountingDone: boolean
 }
 
 export type AddTodayEventResult =
@@ -193,6 +212,7 @@ export async function addTodayEvent(startTimeInput: unknown): Promise<AddTodayEv
         name: existing.name,
         startTime: existing.startTime,
         isArchived: existing.isArchived,
+        isCountingDone: existing.isCountingDone,
       },
     }
   }
@@ -326,6 +346,47 @@ export async function unarchiveEvent(input: unknown) {
   revalidatePath('/dashboard')
   revalidatePath('/settings')
   revalidatePath(`/entry/${id}`)
+}
+
+/**
+ * Marks a service's counting finished, so the dashboard stops offering it as a
+ * service to START counting. Deliberately NOT a gate: a done service still
+ * accepts and corrects counts exactly like any other non-archived one —
+ * saveCount continues to check isArchived only. This is dashboard
+ * organization, not access control, which is why it's requireUser(), not
+ * requireAdmin() like archiveEvent: any volunteer who can create today's
+ * service (see addTodayEvent) can say they've finished counting it.
+ */
+export async function markCountingDone(input: unknown) {
+  await requireUser()
+  const id = idSchema.parse(input)
+
+  const existing = await prisma.event.findUnique({ where: { id } })
+  if (!existing) throw new Error('No such service')
+  // Same sentence every other archived-refusal in this app uses. Marking an
+  // archived service done is meaningless — it's already out of every picker.
+  if (existing.isArchived) throw new Error('That service is not accepting counts')
+
+  await prisma.event.update({ where: { id }, data: { isCountingDone: true } })
+  revalidatePath('/dashboard')
+  revalidatePath(`/entry/${id}`)
+  revalidatePath('/settings')
+}
+
+/** Symmetric with markCountingDone — a mistaken tap must be reversible from
+ * the UI, same reasoning as unarchiveEvent. Identical shape, opposite value. */
+export async function reopenCounting(input: unknown) {
+  await requireUser()
+  const id = idSchema.parse(input)
+
+  const existing = await prisma.event.findUnique({ where: { id } })
+  if (!existing) throw new Error('No such service')
+  if (existing.isArchived) throw new Error('That service is not accepting counts')
+
+  await prisma.event.update({ where: { id }, data: { isCountingDone: false } })
+  revalidatePath('/dashboard')
+  revalidatePath(`/entry/${id}`)
+  revalidatePath('/settings')
 }
 
 /**

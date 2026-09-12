@@ -6,6 +6,7 @@ import { CounterDialog } from '@/components/CounterDialog'
 import { SpeakerDialog } from '@/components/SpeakerDialog'
 import { CategoryRow } from '@/components/CategoryRow'
 import { CategoryCard } from '@/components/CategoryCard'
+import { markCountingDone, reopenCounting } from '@/lib/actions/events'
 import type { Speaker } from '@/lib/actions/speakers'
 
 type Category = { id: string; name: string; type: string; svgKey: string | null }
@@ -29,16 +30,42 @@ export function EntryClient({
   categories,
   initialCounts,
   initialSpeakers,
+  initialIsCountingDone,
 }: {
   eventId: string
   categories: Category[]
   initialCounts: Record<string, number>
   initialSpeakers: Speaker[]
+  initialIsCountingDone: boolean
 }) {
   const [counts, setCounts] = useState(initialCounts)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [speakers, setSpeakers] = useState(initialSpeakers)
   const [isSpeakerDialogOpen, setIsSpeakerDialogOpen] = useState(false)
+  const [isCountingDone, setIsCountingDone] = useState(initialIsCountingDone)
+  const [toggleBusy, setToggleBusy] = useState(false)
+  const [toggleError, setToggleError] = useState<string | null>(null)
+
+  // Same busy/error mechanics as ServiceCard's toggle and ServiceRow.unarchive
+  // — a direct call inside its own try/catch, no useActionState wrapper. This
+  // is reversible and blocks nothing, so no ConfirmDialog either.
+  async function toggleCountingDone() {
+    setToggleBusy(true)
+    setToggleError(null)
+    try {
+      if (isCountingDone) {
+        await reopenCounting(eventId)
+        setIsCountingDone(false)
+      } else {
+        await markCountingDone(eventId)
+        setIsCountingDone(true)
+      }
+    } catch {
+      setToggleError('Could not update — please try again.')
+    } finally {
+      setToggleBusy(false)
+    }
+  }
 
   const sanctuaryOnMap = categories.filter(
     (c): c is Category & { svgKey: string } => c.type === 'SECTION' && Boolean(c.svgKey)
@@ -108,6 +135,22 @@ export function EntryClient({
           )}
         </div>
       ))}
+
+      <div style={{ marginTop: 'var(--space-8)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)' }}>
+        {/* Plain secondary button, not startButtonStyle — that blue accent is
+            reserved for the "start counting" affordance on the dashboard.
+            Reusing it here on the finish action would be confusing. No
+            ConfirmDialog: this is reversible and blocks nothing, unlike
+            Archive. */}
+        <button type="button" onClick={toggleCountingDone} disabled={toggleBusy}>
+          {toggleBusy ? 'Updating…' : isCountingDone ? 'Reopen counting' : 'Mark counting done'}
+        </button>
+        {toggleError && (
+          <p role="alert" style={{ color: 'var(--color-danger)', margin: 0, marginTop: 'var(--space-2)' }}>
+            {toggleError}
+          </p>
+        )}
+      </div>
 
       {selected && (
         <CounterDialog

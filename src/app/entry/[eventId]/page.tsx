@@ -29,7 +29,13 @@ export default async function EntryPage({ params }: { params: Promise<{ eventId:
         <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>
           {formatServiceDate(event.serviceDate)} · {formatServiceTime(event.startTime)}
         </p>
-        <EntryClient eventId={eventId} categories={categories} initialCounts={counts} initialSpeakers={speakers} />
+        <EntryClient
+          eventId={eventId}
+          categories={categories}
+          initialCounts={counts}
+          initialSpeakers={speakers}
+          initialIsCountingDone={event.isCountingDone}
+        />
       </main>
     </>
   )

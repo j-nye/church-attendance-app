@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { getEventSummary } from '@/lib/actions/attendance'
+import { markCountingDone, reopenCounting } from '@/lib/actions/events'
 
 /** Derived from getEventSummary's own return type, so this never drifts out
  * of sync with the server-side shape it's rendering. */
@@ -27,15 +28,46 @@ export function ServiceCard({
   name,
   serviceDate,
   serviceTime,
+  isCountingDone,
+  canToggleCounting,
 }: {
   id: string
   name: string
   serviceDate: string
   serviceTime?: string
+  isCountingDone: boolean
+  /** Only today's services can toggle this — the flag has no visible effect
+   * on any other day, so the dashboard only sets this true for cards whose
+   * event is one of today's. */
+  canToggleCounting: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [status, setStatus] = useState<FetchStatus>('idle')
   const [totals, setTotals] = useState<Totals | null>(null)
+  const [done, setDone] = useState(isCountingDone)
+  const [toggleBusy, setToggleBusy] = useState(false)
+  const [toggleError, setToggleError] = useState<string | null>(null)
+
+  // Same busy/error mechanics as ServiceRow.unarchive in ServicesSection.tsx
+  // — direct call inside its own try/catch, no useActionState wrapper (this
+  // is an idempotent, input-light boolean flip, same shape as archive).
+  async function toggleCountingDone() {
+    setToggleBusy(true)
+    setToggleError(null)
+    try {
+      if (done) {
+        await reopenCounting(id)
+        setDone(false)
+      } else {
+        await markCountingDone(id)
+        setDone(true)
+      }
+    } catch {
+      setToggleError('Could not update — please try again.')
+    } finally {
+      setToggleBusy(false)
+    }
+  }
 
   async function loadSummary() {
     setStatus('loading')
@@ -79,6 +111,22 @@ export function ServiceCard({
           <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
             {serviceDate}
             {serviceTime ? ` · ${serviceTime}` : ''}
+            {done && (
+              // A badge, not dimming — a done service is fully live (counts,
+              // edits, everything work), so darkening the whole card the way
+              // an archived ServiceRow does would falsely suggest otherwise.
+              <span
+                style={{
+                  marginLeft: 'var(--space-2)',
+                  padding: '0 var(--space-2)',
+                  borderRadius: '999px',
+                  background: 'var(--color-surface-raised)',
+                  fontSize: 'var(--text-sm)',
+                }}
+              >
+                Counted
+              </span>
+            )}
           </div>
         </div>
         <div
@@ -92,10 +140,21 @@ export function ServiceCard({
         </div>
       </button>
 
-      <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', alignItems: 'center' }}>
         <Link href={`/entry/${id}`}>Enter counts</Link>
         <Link href={`/report/${id}`}>Summary</Link>
+        {canToggleCounting && (
+          <button type="button" onClick={toggleCountingDone} disabled={toggleBusy}>
+            {toggleBusy ? 'Updating…' : done ? 'Reopen counting' : 'Mark counting done'}
+          </button>
+        )}
       </div>
+
+      {toggleError && (
+        <p role="alert" style={{ color: 'var(--color-danger)', margin: 0, marginTop: 'var(--space-2)' }}>
+          {toggleError}
+        </p>
+      )}
 
       {expanded && (
         <div

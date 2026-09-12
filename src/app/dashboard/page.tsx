@@ -18,6 +18,18 @@ const startButtonStyle = {
 export default async function DashboardPage() {
   const user = await requireUserPage()
   const [events, todayEvents] = await Promise.all([listEvents(), listTodayEvents()])
+  // listTodayEvents() is UNCHANGED — still every non-archived service today,
+  // counted or not. Partitioning here (not in the query) keeps
+  // getOrCreateTodayEvent's own "does today have a live service at all" check
+  // and its P2002 race recovery completely unaffected by counting-done state.
+  // See getOrCreateTodayEvent's doc comment for why filtering the query
+  // itself would silently reopen the wrong-service-routing bug it was built
+  // to fix.
+  const pending = todayEvents.filter((event) => !event.isCountingDone)
+  // The mark-done/reopen toggle only makes sense for today's services — the
+  // flag has no visible effect on any other day, so ServiceCard only renders
+  // it when the card's event is one of today's.
+  const todayEventIds = new Set(todayEvents.map((event) => event.id))
 
   return (
     <>
@@ -57,25 +69,37 @@ export default async function DashboardPage() {
               {"Start counting today's service"}
             </button>
           </form>
-        ) : todayEvents.length === 1 ? (
-          // Exactly 1: it's unambiguous, so the button can still start it
-          // directly — labelled with its time so the volunteer confirms it's
-          // the right one before tapping. No time input here: the service
-          // already exists, so there's nothing to choose.
+        ) : pending.length === 0 ? (
+          // Today has services, but every one of them has been marked done —
+          // there's nothing left to offer as a "start counting" target.
+          // Deliberately no button here: calling getOrCreateTodayEvent would
+          // hit its own unfiltered ">1 today" throw once a second service
+          // exists, or silently return the lone done service if only one
+          // does — either way, wrong. A done service is still fully visible
+          // and countable via its ServiceCard below.
+          <p role="status" style={{ margin: 0, color: 'var(--color-text-muted)' }}>
+            All of today&rsquo;s services are counted.
+          </p>
+        ) : pending.length === 1 ? (
+          // Exactly 1 pending: unambiguous, so the button starts it directly
+          // by redirecting to its already-known id — NOT by calling
+          // getOrCreateTodayEvent(), which would re-run its own unfiltered
+          // "today's live services" query and throw if a done sibling is
+          // also present today (2 rows found). Modeled on the 2+ branch's
+          // per-service form below, not the legacy 1-service branch.
           <form
             action={async () => {
               'use server'
               const { redirect } = await import('next/navigation')
-              const event = await getOrCreateTodayEvent()
-              redirect(`/entry/${event.id}`)
+              redirect(`/entry/${pending[0].id}`)
             }}
           >
             <button type="submit" style={startButtonStyle}>
-              {`Start counting — ${formatServiceTime(todayEvents[0].startTime)}`}
+              {`Start counting — ${formatServiceTime(pending[0].startTime)}`}
             </button>
           </form>
         ) : (
-          // 2+ services today: never guess which one. One button per
+          // 2+ pending services today: never guess which one. One button per
           // service, each posting that specific eventId. No default
           // selection and no auto-redirect — see getOrCreateTodayEvent's
           // doc comment for why this function refuses to pick for you.
@@ -83,7 +107,7 @@ export default async function DashboardPage() {
             <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
               Multiple services today — choose one:
             </p>
-            {todayEvents.map((event) => (
+            {pending.map((event) => (
               <form
                 key={event.id}
                 action={async () => {
@@ -110,6 +134,8 @@ export default async function DashboardPage() {
               name={event.name}
               serviceDate={formatServiceDate(event.serviceDate)}
               serviceTime={formatServiceTime(event.startTime)}
+              isCountingDone={event.isCountingDone}
+              canToggleCounting={todayEventIds.has(event.id)}
             />
           ))}
         </ul>

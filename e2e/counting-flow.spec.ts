@@ -139,3 +139,71 @@ test('two services on the same date route to separate entry screens with separat
   const lateRow = page.locator('tr', { hasText: 'Left Wing' })
   await expect(lateRow.locator('td').nth(1)).toHaveText('20')
 })
+
+test('marking a service counted removes it from the start-counting picker without blocking its own counts', async ({ page }) => {
+  // Coverage for Event.isCountingDone: a volunteer finishing one service and
+  // starting another needs a lightweight "I'm done with this one" signal
+  // that's lighter than admin-only archiving and does NOT block corrections.
+  // Uses 2:15 PM / 3:30 PM — times not used anywhere else in this file (or
+  // in authz.spec.ts's 7:45 PM), since services created here share the same
+  // church-local calendar date as every other test in this suite.
+  const todayServiceDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+
+  async function createService(name: string, time: string) {
+    await page.getByPlaceholder('Service name').fill(name)
+    await page.locator('input[name="serviceDate"]').fill(todayServiceDate)
+    await page.locator('input[name="startTime"]').fill(time)
+    await page.getByRole('button', { name: 'Create service' }).click()
+    await expect(page.getByText(name, { exact: false })).toBeVisible()
+  }
+
+  await page.goto('/settings')
+  await createService('Counting Done E2E First', '14:15')
+  await createService('Counting Done E2E Second', '15:30')
+
+  await page.goto('/dashboard')
+
+  const firstButton = page.getByRole('button', {
+    name: 'Start counting — 2:15 PM (Counting Done E2E First)',
+    exact: true,
+  })
+  const secondButton = page.getByRole('button', {
+    name: 'Start counting — 3:30 PM (Counting Done E2E Second)',
+    exact: true,
+  })
+  await expect(firstButton).toBeVisible()
+  await expect(secondButton).toBeVisible()
+
+  // Mark the first service's counting done from its dashboard card (not the
+  // picker above, which has no such control).
+  const firstCard = page.locator('li', { hasText: 'Counting Done E2E First' })
+  await firstCard.getByRole('button', { name: 'Mark counting done' }).click()
+
+  // Its "Start counting" button disappears from the picker; the still-
+  // pending second service's button is unaffected.
+  await expect(firstButton).toHaveCount(0)
+  await expect(secondButton).toBeVisible()
+
+  // The done service still appears in the card list below — this is
+  // dashboard organization, not a soft-delete — now with a "Counted" badge.
+  await expect(firstCard).toBeVisible()
+  await expect(firstCard.getByText('Counted')).toBeVisible()
+
+  // The assertion that actually matters: isCountingDone is not a gate. Reach
+  // the done service's entry screen via its own card link (the picker no
+  // longer offers it) and successfully save a count there.
+  await firstCard.getByRole('link', { name: 'Enter counts' }).click()
+  await expect(page).toHaveURL(/\/entry\/[^/]+$/)
+
+  await page.getByRole('button', { name: /^Left Wing,/i }).click()
+  const dialog = page.getByRole('dialog', { name: 'Count for Left Wing' })
+  await dialog.getByRole('button', { name: '+10' }).click()
+  await expect(dialog.getByRole('status')).toHaveText('10')
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await expect(dialog).not.toBeVisible()
+})

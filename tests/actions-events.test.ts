@@ -62,6 +62,8 @@ const {
   addNamedTodayEvent,
   addTodayEventAction,
   addNamedTodayEventAction,
+  markCountingDone,
+  reopenCounting,
 } = await import('@/lib/actions/events')
 
 beforeEach(() => {
@@ -1042,5 +1044,95 @@ describe('updateEventScheduleAction', () => {
         eventFormData({ id: 'id1', serviceDate: '2026-09-13', startTime: '11:00' })
       )
     ).rejects.toThrow('connection reset')
+  })
+})
+
+describe('markCountingDone', () => {
+  it('requires a signed-in user', async () => {
+    requireUser.mockRejectedValue(new AuthzError('UNAUTHENTICATED'))
+    await expect(markCountingDone('id1')).rejects.toThrow(AuthzError)
+    expect(eventFindUnique).not.toHaveBeenCalled()
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed/missing id via idSchema before touching the database', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    await expect(markCountingDone('')).rejects.toThrow(ZodError)
+    expect(eventFindUnique).not.toHaveBeenCalled()
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('throws "No such service" for a nonexistent id', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindUnique.mockResolvedValue(null)
+
+    await expect(markCountingDone('missing')).rejects.toThrow('No such service')
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('refuses an archived service', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: true })
+
+    await expect(markCountingDone('id1')).rejects.toThrow('That service is not accepting counts')
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('marks counting done and revalidates exactly dashboard, its own entry page, and settings', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: false })
+
+    await markCountingDone('id1')
+
+    expect(eventUpdate).toHaveBeenCalledWith({ where: { id: 'id1' }, data: { isCountingDone: true } })
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/id1')
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+    expect(revalidatePath).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('reopenCounting', () => {
+  it('requires a signed-in user', async () => {
+    requireUser.mockRejectedValue(new AuthzError('UNAUTHENTICATED'))
+    await expect(reopenCounting('id1')).rejects.toThrow(AuthzError)
+    expect(eventFindUnique).not.toHaveBeenCalled()
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed/missing id via idSchema before touching the database', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    await expect(reopenCounting('')).rejects.toThrow(ZodError)
+    expect(eventFindUnique).not.toHaveBeenCalled()
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('throws "No such service" for a nonexistent id', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindUnique.mockResolvedValue(null)
+
+    await expect(reopenCounting('missing')).rejects.toThrow('No such service')
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('refuses an archived service', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: true })
+
+    await expect(reopenCounting('id1')).rejects.toThrow('That service is not accepting counts')
+    expect(eventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('reopens counting and revalidates exactly dashboard, its own entry page, and settings', async () => {
+    requireUser.mockResolvedValue({ email: 'vol@example.com', role: 'VOLUNTEER' })
+    eventFindUnique.mockResolvedValue({ id: 'id1', isArchived: false })
+
+    await reopenCounting('id1')
+
+    expect(eventUpdate).toHaveBeenCalledWith({ where: { id: 'id1' }, data: { isCountingDone: false } })
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard')
+    expect(revalidatePath).toHaveBeenCalledWith('/entry/id1')
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+    expect(revalidatePath).toHaveBeenCalledTimes(3)
   })
 })

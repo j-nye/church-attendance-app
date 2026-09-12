@@ -31,6 +31,7 @@ export default async function SettingsPage() {
     serviceDate: e.serviceDate,
     startTime: e.startTime,
     isArchived: e.isArchived,
+    isCountingDone: e.isCountingDone,
   }))
   const defaultServiceDate = nextSundayServiceDate()
 

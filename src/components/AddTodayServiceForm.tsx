@@ -129,6 +129,10 @@ export function AddTodayServiceForm() {
           <p role="status" style={{ margin: 0 }}>
             {`There's already a service at ${time} today (${existing.name}), but it's archived and can't accept counts. If that's not what you meant, ask an admin to restore it.`}
           </p>
+        ) : existing.isCountingDone ? (
+          <p role="status" style={{ margin: 0 }}>
+            {`There's already a ${time} service today: ${existing.name} (already marked counted). Is this the same service, or a different one?`}
+          </p>
         ) : (
           <p role="status" style={{ margin: 0 }}>
             {`There's already a service at ${time} today: ${existing.name}. Is this the same service, or a different one?`}
