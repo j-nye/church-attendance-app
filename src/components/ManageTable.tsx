@@ -10,6 +10,7 @@ export type ManageTableRow = {
   categoryType: string
   count?: number
   recordedBy?: string
+  recordedByName?: string
   /** ISO string — plain serializable data crossing the server/client boundary. */
   updatedAt?: string
 }
@@ -29,7 +30,7 @@ export function ManageTable({ eventId, rows: initialRows }: { eventId: string; r
       setRows((prev) =>
         prev.map((r) =>
           r.categoryId === row.categoryId
-            ? { ...r, count: undefined, recordedBy: undefined, updatedAt: undefined }
+            ? { ...r, count: undefined, recordedBy: undefined, recordedByName: undefined, updatedAt: undefined }
             : r
         )
       )
@@ -58,7 +59,19 @@ export function ManageTable({ eventId, rows: initialRows }: { eventId: string; r
               <td>{row.categoryName}</td>
               <td>{row.categoryType}</td>
               <td style={{ textAlign: 'right' }}>{row.count ?? '—'}</td>
-              <td>{row.recordedBy ?? '—'}</td>
+              <td>
+                {row.recordedBy ? (
+                  <>
+                    {row.recordedByName ?? row.recordedBy}
+                    <br />
+                    {/* An admin revoking access needs the address, and the
+                        name alone is ambiguous if two people share one. */}
+                    <small style={{ color: 'var(--color-text-muted)' }}>{row.recordedBy}</small>
+                  </>
+                ) : (
+                  '—'
+                )}
+              </td>
               <td>{row.updatedAt ? new Date(row.updatedAt).toLocaleString() : '—'}</td>
               <td style={{ display: 'flex', gap: 'var(--space-2)' }}>
                 <button onClick={() => setEditingId(row.categoryId)}>Edit</button>

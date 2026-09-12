@@ -14,7 +14,19 @@ import {
   moveCategorySchema,
   renameCategorySchema,
   updateCategorySchema,
+  startTimeSchema,
+  updateEventScheduleSchema,
+  nearbyServiceDateSchema,
+  addServiceSchemaByRole,
+  addNamedServiceSchemaByRole,
 } from '@/lib/validation'
+import {
+  todayServiceDate,
+  shiftServiceDate,
+  serviceDateWindow,
+  SERVICE_DATE_PAST_DAYS,
+  SERVICE_DATE_FUTURE_DAYS,
+} from '@/lib/dates'
 
 describe('saveCountSchema', () => {
   const valid = { eventId: 'clx0000000000000000000001', categoryId: 'clx0000000000000000000002', count: 42 }
@@ -153,18 +165,182 @@ describe('createCategorySchema — countsTowardTotal', () => {
 
 describe('createEventSchema', () => {
   it('accepts a YYYY-MM-DD service date', () => {
-    const result = createEventSchema.parse({ name: 'Sunday Service - 9AM', serviceDate: '2026-08-09' })
+    const result = createEventSchema.parse({
+      name: 'Sunday Service - 9AM',
+      serviceDate: '2026-08-09',
+      startTime: '09:30',
+    })
     expect(result.serviceDate).toBe('2026-08-09')
   })
 
   it('rejects a timestamp masquerading as a service date', () => {
     expect(() =>
-      createEventSchema.parse({ name: 'Sunday', serviceDate: '2026-08-09T13:00:00Z' })
+      createEventSchema.parse({
+        name: 'Sunday',
+        serviceDate: '2026-08-09T13:00:00Z',
+        startTime: '09:30',
+      })
     ).toThrow()
   })
 
   it('rejects an impossible calendar date', () => {
-    expect(() => createEventSchema.parse({ name: 'Sunday', serviceDate: '2026-02-30' })).toThrow()
+    expect(() =>
+      createEventSchema.parse({ name: 'Sunday', serviceDate: '2026-02-30', startTime: '09:30' })
+    ).toThrow()
+  })
+
+  it('requires a start time', () => {
+    expect(() =>
+      createEventSchema.parse({ name: 'Sunday', serviceDate: '2026-08-09' })
+    ).toThrow()
+  })
+
+  it('reports a missing start time with the friendly sentence', () => {
+    const { error } = createEventSchema.safeParse({ name: 'Sunday', serviceDate: '2026-08-09' })
+    expect(friendlyValidationMessage(error!)).toBe('Service time is required.')
+  })
+})
+
+describe('startTimeSchema', () => {
+  it.each(['09:30', '00:00', '23:59'])('accepts %s', (value) => {
+    expect(startTimeSchema.parse(value)).toBe(value)
+  })
+
+  it.each(['9:30', '24:00', '12:60', '9:30 AM', ''])('rejects %s', (value) => {
+    expect(() => startTimeSchema.parse(value)).toThrow()
+  })
+
+  it('rejects a non-string', () => {
+    expect(() => startTimeSchema.parse(930)).toThrow()
+  })
+})
+
+describe('updateEventScheduleSchema', () => {
+  const valid = { id: 'clx0000000000000000000001', serviceDate: '2026-08-09', startTime: '11:00' }
+
+  it('accepts a valid id, date, and time', () => {
+    const result = updateEventScheduleSchema.parse(valid)
+    expect(result).toEqual(valid)
+  })
+
+  it('rejects a malformed time', () => {
+    expect(() => updateEventScheduleSchema.parse({ ...valid, startTime: '9:30' })).toThrow()
+  })
+
+  it('rejects a malformed date', () => {
+    expect(() => updateEventScheduleSchema.parse({ ...valid, serviceDate: '2026-02-30' })).toThrow()
+  })
+})
+
+describe('nearbyServiceDateSchema', () => {
+  it('accepts today', () => {
+    const today = todayServiceDate()
+    expect(nearbyServiceDateSchema.parse(today)).toBe(today)
+  })
+
+  it('accepts both exact window endpoints', () => {
+    const { min, max } = serviceDateWindow()
+    expect(nearbyServiceDateSchema.parse(min)).toBe(min)
+    expect(nearbyServiceDateSchema.parse(max)).toBe(max)
+  })
+
+  it('rejects one day past the future edge', () => {
+    const tooFar = shiftServiceDate(todayServiceDate(), SERVICE_DATE_FUTURE_DAYS + 1)
+    expect(() => nearbyServiceDateSchema.parse(tooFar)).toThrow()
+  })
+
+  it('rejects one day past the past edge', () => {
+    const tooFar = shiftServiceDate(todayServiceDate(), -(SERVICE_DATE_PAST_DAYS + 1))
+    expect(() => nearbyServiceDateSchema.parse(tooFar)).toThrow()
+  })
+
+  it('still rejects a malformed date before ever reaching the range check', () => {
+    expect(() => nearbyServiceDateSchema.parse('not-a-date')).toThrow()
+  })
+})
+
+describe('addServiceSchemaByRole', () => {
+  it('VOLUNTEER: accepts a nearby date', () => {
+    const serviceDate = todayServiceDate()
+    const result = addServiceSchemaByRole.VOLUNTEER.parse({ serviceDate, startTime: '11:00' })
+    expect(result).toEqual({ serviceDate, startTime: '11:00' })
+  })
+
+  it('VOLUNTEER: rejects a far-future date', () => {
+    const serviceDate = shiftServiceDate(todayServiceDate(), SERVICE_DATE_FUTURE_DAYS + 1)
+    expect(() => addServiceSchemaByRole.VOLUNTEER.parse({ serviceDate, startTime: '11:00' })).toThrow()
+  })
+
+  it('ADMIN: accepts the exact same far-future date the VOLUNTEER schema rejects', () => {
+    const serviceDate = shiftServiceDate(todayServiceDate(), SERVICE_DATE_FUTURE_DAYS + 1)
+    const result = addServiceSchemaByRole.ADMIN.parse({ serviceDate, startTime: '11:00' })
+    expect(result).toEqual({ serviceDate, startTime: '11:00' })
+  })
+
+  it('ADMIN: accepts a far-past date too — no server-side bound at all', () => {
+    const serviceDate = shiftServiceDate(todayServiceDate(), -(SERVICE_DATE_PAST_DAYS + 1))
+    const result = addServiceSchemaByRole.ADMIN.parse({ serviceDate, startTime: '11:00' })
+    expect(result).toEqual({ serviceDate, startTime: '11:00' })
+  })
+
+  it('both roles reject a malformed startTime', () => {
+    const serviceDate = todayServiceDate()
+    expect(() => addServiceSchemaByRole.VOLUNTEER.parse({ serviceDate, startTime: '9:30' })).toThrow()
+    expect(() => addServiceSchemaByRole.ADMIN.parse({ serviceDate, startTime: '9:30' })).toThrow()
+  })
+})
+
+describe('addNamedServiceSchemaByRole', () => {
+  const NAME = 'Spanish Service'
+
+  it('VOLUNTEER: accepts a nearby date plus a name', () => {
+    const serviceDate = todayServiceDate()
+    const result = addNamedServiceSchemaByRole.VOLUNTEER.parse({ serviceDate, startTime: '11:00', name: NAME })
+    expect(result).toEqual({ serviceDate, startTime: '11:00', name: NAME })
+  })
+
+  it('VOLUNTEER: rejects a far-future date even with a valid name', () => {
+    const serviceDate = shiftServiceDate(todayServiceDate(), SERVICE_DATE_FUTURE_DAYS + 1)
+    expect(() =>
+      addNamedServiceSchemaByRole.VOLUNTEER.parse({ serviceDate, startTime: '11:00', name: NAME })
+    ).toThrow()
+  })
+
+  it('ADMIN: accepts the exact same far-future date the VOLUNTEER schema rejects', () => {
+    const serviceDate = shiftServiceDate(todayServiceDate(), SERVICE_DATE_FUTURE_DAYS + 1)
+    const result = addNamedServiceSchemaByRole.ADMIN.parse({ serviceDate, startTime: '11:00', name: NAME })
+    expect(result).toEqual({ serviceDate, startTime: '11:00', name: NAME })
+  })
+
+  it('rejects a blank name for both roles', () => {
+    const serviceDate = todayServiceDate()
+    expect(() =>
+      addNamedServiceSchemaByRole.VOLUNTEER.parse({ serviceDate, startTime: '11:00', name: '   ' })
+    ).toThrow()
+    expect(() =>
+      addNamedServiceSchemaByRole.ADMIN.parse({ serviceDate, startTime: '11:00', name: '   ' })
+    ).toThrow()
+  })
+})
+
+describe('shared serviceDateSchema stays unbounded', () => {
+  // Guard against ever tightening the schema createEventSchema and
+  // updateEventScheduleSchema both depend on — the volunteer bound lives
+  // exclusively in nearbyServiceDateSchema, layered on top.
+  it('createEventSchema still accepts a far-out date unchanged', () => {
+    const farFuture = shiftServiceDate(todayServiceDate(), SERVICE_DATE_FUTURE_DAYS + 365)
+    const result = createEventSchema.parse({ name: 'Special Service', serviceDate: farFuture, startTime: '11:00' })
+    expect(result.serviceDate).toBe(farFuture)
+  })
+
+  it('updateEventScheduleSchema still accepts a far-out date unchanged', () => {
+    const farPast = shiftServiceDate(todayServiceDate(), -(SERVICE_DATE_PAST_DAYS + 3650))
+    const result = updateEventScheduleSchema.parse({
+      id: 'clx0000000000000000000001',
+      serviceDate: farPast,
+      startTime: '11:00',
+    })
+    expect(result.serviceDate).toBe(farPast)
   })
 })
 
@@ -265,7 +441,11 @@ describe('updateCategorySchema', () => {
 
 describe('friendlyValidationMessage — service date field label', () => {
   it('reports a bad service date using the "Service date" label, not the raw field name', () => {
-    const { error } = createEventSchema.safeParse({ name: 'Sunday', serviceDate: 'not-a-date' })
+    const { error } = createEventSchema.safeParse({
+      name: 'Sunday',
+      serviceDate: 'not-a-date',
+      startTime: '09:30',
+    })
     expect(friendlyValidationMessage(error!)).toBe('Service date is not valid.')
   })
 })
@@ -294,5 +474,16 @@ describe('friendlyValidationMessage', () => {
   it('falls back to a generic message for a field it does not recognize', () => {
     const { error } = saveCountSchema.safeParse({ categoryId: 'c1', count: 1 }) // eventId missing entirely
     expect(friendlyValidationMessage(error!)).toBe('That field is required.')
+  })
+
+  // NEW COVERAGE: a `custom` issue (nearbyServiceDateSchema's .refine()) must
+  // surface its own message verbatim rather than degrading to the generic
+  // "<label> is not valid." fallback every other unrecognized code gets.
+  it('reports a custom refine issue using its own message, not the generic fallback', () => {
+    const tooFar = shiftServiceDate(todayServiceDate(), SERVICE_DATE_FUTURE_DAYS + 1)
+    const { error } = addServiceSchemaByRole.VOLUNTEER.safeParse({ serviceDate: tooFar, startTime: '11:00' })
+    const message = friendlyValidationMessage(error!)
+    expect(message).toMatch(/too far out/)
+    expect(message).not.toBe('Service date is not valid.')
   })
 })

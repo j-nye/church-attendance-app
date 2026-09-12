@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { requireAdminPage } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
 import { getManageRows } from '@/lib/actions/attendance'
-import { formatServiceDate } from '@/lib/dates'
+import { formatServiceDate, formatServiceTime } from '@/lib/dates'
 import { ManageTable } from '@/components/ManageTable'
 import { AppHeader } from '@/components/AppHeader'
 
@@ -30,7 +30,9 @@ export default async function ManagePage({ params }: { params: Promise<{ eventId
       <AppHeader helpAnchor="manage" />
       <main style={{ padding: 'var(--space-4)', maxWidth: '48rem', margin: '0 auto' }}>
         <h1 style={{ fontSize: 'var(--text-xl)' }}>{event.name}</h1>
-        <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>{formatServiceDate(event.serviceDate)}</p>
+        <p style={{ color: 'var(--color-text-muted)', marginTop: 0 }}>
+          {formatServiceDate(event.serviceDate)} · {formatServiceTime(event.startTime)}
+        </p>
         <p style={{ color: 'var(--color-text-muted)' }}>Manage attendance records</p>
         <ManageTable eventId={eventId} rows={tableRows} />
       </main>

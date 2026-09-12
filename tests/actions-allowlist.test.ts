@@ -36,9 +36,14 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePath(...args),
 }))
 
-const { listAllowlist, addAllowlistEntry, deactivateAllowlistEntry, addAllowlistEntryAction } = await import(
-  '@/lib/actions/allowlist'
-)
+const {
+  listAllowlist,
+  addAllowlistEntry,
+  deactivateAllowlistEntry,
+  addAllowlistEntryAction,
+  updateAllowlistName,
+  updateAllowlistNameAction,
+} = await import('@/lib/actions/allowlist')
 
 const admin = { email: 'admin@example.com', role: 'ADMIN' as const }
 
@@ -64,6 +69,55 @@ describe('listAllowlist', () => {
     allowlistFindMany.mockResolvedValue([{ id: '1' }])
     const result = await listAllowlist()
     expect(result).toEqual([{ id: '1' }])
+  })
+
+  it('orders by isActive desc, then role asc, then display name, then email asc', async () => {
+    // Deliberately returned from the mock in a scrambled order: listAllowlist
+    // must not rely on Prisma-level orderBy alone to produce the right
+    // sequence, since Postgres cannot sort on COALESCE(adminOverrideName,
+    // name) through Prisma's query builder. Phase 3's grouping UI depends on
+    // this ordering being correct, so it gets its own explicit assertion.
+    requireAdmin.mockResolvedValue(admin)
+    allowlistFindMany.mockResolvedValue([
+      {
+        id: '1',
+        email: 'zoe@example.com',
+        role: 'VOLUNTEER',
+        isActive: true,
+        name: 'Zoe',
+        adminOverrideName: null,
+      },
+      {
+        id: '2',
+        email: 'amy@example.com',
+        role: 'ADMIN',
+        isActive: true,
+        name: 'Amy',
+        adminOverrideName: null,
+      },
+      {
+        id: '3',
+        email: 'bob@example.com',
+        role: 'VOLUNTEER',
+        isActive: false,
+        name: 'Bob',
+        adminOverrideName: null,
+      },
+      {
+        // No `name` at all — the admin override is the only display name
+        // available, and it sorts before 'Zoe' among the active volunteers.
+        id: '4',
+        email: 'carl@example.com',
+        role: 'VOLUNTEER',
+        isActive: true,
+        name: null,
+        adminOverrideName: 'Aaron',
+      },
+    ])
+
+    const result = await listAllowlist()
+
+    expect(result.map((entry: { id: string }) => entry.id)).toEqual(['2', '4', '1', '3'])
   })
 })
 
@@ -177,6 +231,69 @@ describe('deactivateAllowlistEntry', () => {
   })
 })
 
+describe('updateAllowlistName', () => {
+  it('rejects a non-admin before looking anything up', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+    await expect(updateAllowlistName({ id: 'id1', name: 'Jane Doe' })).rejects.toThrow(AuthzError)
+    expect(allowlistFindUnique).not.toHaveBeenCalled()
+    expect(allowlistUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a name over the length cap for an admin', async () => {
+    requireAdmin.mockResolvedValue(admin)
+    await expect(updateAllowlistName({ id: 'id1', name: 'x'.repeat(81) })).rejects.toThrow()
+    expect(allowlistFindUnique).not.toHaveBeenCalled()
+    expect(allowlistUpdate).not.toHaveBeenCalled()
+  })
+
+  it('trims the name before writing adminOverrideName', async () => {
+    requireAdmin.mockResolvedValue(admin)
+    allowlistFindUnique.mockResolvedValue({ id: 'id1', email: 'vol@example.com' })
+
+    await updateAllowlistName({ id: 'id1', name: '  Jane Doe  ' })
+
+    expect(allowlistUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { adminOverrideName: 'Jane Doe' },
+    })
+    expect(revalidatePath).toHaveBeenCalledWith('/settings')
+  })
+
+  it('clears adminOverrideName back to null for an empty string', async () => {
+    requireAdmin.mockResolvedValue(admin)
+    allowlistFindUnique.mockResolvedValue({ id: 'id1', email: 'vol@example.com' })
+
+    await updateAllowlistName({ id: 'id1', name: '' })
+
+    expect(allowlistUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { adminOverrideName: null },
+    })
+  })
+
+  it('clears adminOverrideName back to null for a whitespace-only string', async () => {
+    requireAdmin.mockResolvedValue(admin)
+    allowlistFindUnique.mockResolvedValue({ id: 'id1', email: 'vol@example.com' })
+
+    await updateAllowlistName({ id: 'id1', name: '   ' })
+
+    expect(allowlistUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { adminOverrideName: null },
+    })
+  })
+
+  it('throws a clean error when the target entry does not exist, not a raw Prisma error', async () => {
+    requireAdmin.mockResolvedValue(admin)
+    allowlistFindUnique.mockResolvedValue(null)
+
+    await expect(updateAllowlistName({ id: 'missing', name: 'Jane Doe' })).rejects.toThrow(
+      'No such allowlist entry'
+    )
+    expect(allowlistUpdate).not.toHaveBeenCalled()
+  })
+})
+
 function allowlistFormData(fields: Record<string, string>): FormData {
   const data = new FormData()
   for (const [key, value] of Object.entries(fields)) data.set(key, value)
@@ -250,5 +367,66 @@ describe('addAllowlistEntryAction', () => {
     await expect(
       addAllowlistEntryAction({ ok: true }, allowlistFormData({ email: 'new@example.com', role: 'VOLUNTEER' }))
     ).rejects.toThrow('connection reset')
+  })
+})
+
+describe('updateAllowlistNameAction', () => {
+  it('returns { ok: true } and writes adminOverrideName for valid input', async () => {
+    requireAdmin.mockResolvedValue(admin)
+    allowlistFindUnique.mockResolvedValue({ id: 'id1', email: 'vol@example.com' })
+
+    const result = await updateAllowlistNameAction(
+      { ok: true },
+      allowlistFormData({ id: 'id1', name: 'Jane Doe' })
+    )
+
+    expect(result).toEqual({ ok: true })
+    expect(allowlistUpdate).toHaveBeenCalledWith({
+      where: { id: 'id1' },
+      data: { adminOverrideName: 'Jane Doe' },
+    })
+  })
+
+  it('returns a friendly inline message instead of throwing for a name over the length cap', async () => {
+    requireAdmin.mockResolvedValue(admin)
+
+    const result = await updateAllowlistNameAction(
+      { ok: true },
+      allowlistFormData({ id: 'id1', name: 'x'.repeat(81) })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'Name is too long.' })
+    expect(allowlistUpdate).not.toHaveBeenCalled()
+  })
+
+  it('returns a friendly inline message when the session is no longer an admin', async () => {
+    requireAdmin.mockRejectedValue(new AuthzError('FORBIDDEN'))
+
+    const result = await updateAllowlistNameAction(
+      { ok: true },
+      allowlistFormData({ id: 'id1', name: 'Jane Doe' })
+    )
+
+    expect(result).toEqual({ ok: false, message: 'You are not authorized to do that.' })
+    expect(allowlistUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rethrows an unexpected error so the app error boundary still catches it', async () => {
+    requireAdmin.mockResolvedValue(admin)
+    allowlistFindUnique.mockResolvedValue({ id: 'id1', email: 'vol@example.com' })
+    allowlistUpdate.mockRejectedValue(new Error('connection reset'))
+
+    await expect(
+      updateAllowlistNameAction({ ok: true }, allowlistFormData({ id: 'id1', name: 'Jane Doe' }))
+    ).rejects.toThrow('connection reset')
+  })
+
+  it('rethrows the clean not-found error rather than swallowing it', async () => {
+    requireAdmin.mockResolvedValue(admin)
+    allowlistFindUnique.mockResolvedValue(null)
+
+    await expect(
+      updateAllowlistNameAction({ ok: true }, allowlistFormData({ id: 'missing', name: 'Jane Doe' }))
+    ).rejects.toThrow('No such allowlist entry')
   })
 })
