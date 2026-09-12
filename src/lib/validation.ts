@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { Role } from '@/lib/authz' // type-only
+import { SERVICE_DATE_PAST_DAYS, SERVICE_DATE_FUTURE_DAYS, serviceDateWindow } from '@/lib/dates'
 
 export const CATEGORY_NAME_MAX = 60
 export const EVENT_NAME_MAX = 80
@@ -95,6 +97,40 @@ export const updateEventScheduleSchema = z.object({
   startTime: startTimeSchema,
 })
 
+/**
+ * The volunteer bound. This window is what justifies addService being
+ * requireUser() rather than requireAdmin() — see that function's doc
+ * comment in events.ts.
+ */
+export const nearbyServiceDateSchema = serviceDateSchema.refine((value) => {
+  const { min, max } = serviceDateWindow()
+  return value >= min && value <= max
+}, `That date is too far out — a service can be added from ${SERVICE_DATE_PAST_DAYS} days back to ${SERVICE_DATE_FUTURE_DAYS} days ahead. For anything else, ask an admin to create it in Settings.`)
+
+/**
+ * Role-indexed, not a factory function — built once at module scope so each
+ * variant stays easy to test in isolation and there's exactly one parse call
+ * (and therefore one ZodError) per action, regardless of role. Role-
+ * conditional INPUT validation is new to this codebase (the existing
+ * per-role branching in getEventSummary is output-only) — this is the first
+ * of its kind here, so keep the two schemas side by side and obviously
+ * paired rather than derived cleverly.
+ */
+export const addServiceSchemaByRole = {
+  VOLUNTEER: z.object({ serviceDate: nearbyServiceDateSchema, startTime: startTimeSchema }),
+  // Deliberately identical bound to createEventSchema's (i.e. none) — an
+  // admin already has unrestricted date access via Settings, and can move or
+  // archive anything they mis-date. Do NOT add a server-side admin bound
+  // here; the client-side min/max (serviceDateWindowFor) is a typo guard
+  // only and must stay purely cosmetic.
+  ADMIN: z.object({ serviceDate: serviceDateSchema, startTime: startTimeSchema }),
+} as const satisfies Record<Role, z.ZodTypeAny>
+
+export const addNamedServiceSchemaByRole = {
+  VOLUNTEER: addServiceSchemaByRole.VOLUNTEER.extend({ name: createEventSchema.shape.name }),
+  ADMIN: addServiceSchemaByRole.ADMIN.extend({ name: createEventSchema.shape.name }),
+} as const satisfies Record<Role, z.ZodTypeAny>
+
 export const allowlistEntrySchema = z.object({
   // Zod 4 deprecated method-style `z.string().email()` in favor of top-level `z.email()`.
   // Transform and length-check as a string first, then pipe into the email validator.
@@ -157,6 +193,8 @@ export function friendlyValidationMessage(error: z.ZodError): string {
         : `${label} is not valid.`
     case 'invalid_value':
       return `${label} must be one of the listed options.`
+    case 'custom':
+      return issue.message
     default:
       return `${label} is not valid.`
   }

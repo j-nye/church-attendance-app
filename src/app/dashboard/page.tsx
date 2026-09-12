@@ -1,10 +1,10 @@
 import Link from 'next/link'
 import { requireUserPage } from '@/lib/authz'
 import { listEvents, listTodayEvents, getOrCreateTodayEvent } from '@/lib/actions/events'
-import { formatServiceDate, formatServiceTime } from '@/lib/dates'
+import { formatServiceDate, formatServiceTime, todayServiceDate, serviceDateWindowFor } from '@/lib/dates'
 import { AppHeader } from '@/components/AppHeader'
 import { ServiceCard } from '@/components/ServiceCard'
-import { AddTodayServiceForm } from '@/components/AddTodayServiceForm'
+import { AddServiceForm } from '@/components/AddServiceForm'
 
 const startButtonStyle = {
   width: '100%',
@@ -17,6 +17,7 @@ const startButtonStyle = {
 
 export default async function DashboardPage() {
   const user = await requireUserPage()
+  const { min, max } = serviceDateWindowFor(user.role)
   const [events, todayEvents] = await Promise.all([listEvents(), listTodayEvents()])
   // listTodayEvents() is UNCHANGED — still every non-archived service today,
   // counted or not. Partitioning here (not in the query) keeps
@@ -124,7 +125,11 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        {todayEvents.length > 0 && <AddTodayServiceForm />}
+        <AddServiceForm
+          defaultServiceDate={todayServiceDate()}
+          minServiceDate={min}
+          maxServiceDate={max}
+        />
 
         <ul style={{ listStyle: 'none', padding: 0, marginTop: 'var(--space-8)' }}>
           {events.map((event) => (

@@ -5,6 +5,13 @@ import {
   formatServiceTime,
   nextSundayServiceDate,
   CHURCH_TIMEZONE,
+  shiftServiceDate,
+  serviceDateWindow,
+  serviceDateWindowFor,
+  SERVICE_DATE_PAST_DAYS,
+  SERVICE_DATE_FUTURE_DAYS,
+  ADMIN_SERVICE_DATE_PAST_DAYS,
+  ADMIN_SERVICE_DATE_FUTURE_DAYS,
 } from '@/lib/dates'
 
 describe('toServiceDate', () => {
@@ -96,5 +103,75 @@ describe('nextSundayServiceDate', () => {
 describe('CHURCH_TIMEZONE', () => {
   it('is a valid IANA zone', () => {
     expect(() => new Intl.DateTimeFormat('en-US', { timeZone: CHURCH_TIMEZONE })).not.toThrow()
+  })
+})
+
+describe('shiftServiceDate', () => {
+  it('shifts forward by a positive number of days', () => {
+    expect(shiftServiceDate('2026-09-06', 3)).toBe('2026-09-09')
+  })
+
+  it('shifts backward with a negative number of days', () => {
+    expect(shiftServiceDate('2026-09-06', -3)).toBe('2026-09-03')
+  })
+
+  it('rolls forward across a month boundary', () => {
+    expect(shiftServiceDate('2026-08-30', 3)).toBe('2026-09-02')
+  })
+
+  it('rolls backward across a month boundary', () => {
+    expect(shiftServiceDate('2026-09-02', -3)).toBe('2026-08-30')
+  })
+
+  it('rolls forward across a year boundary', () => {
+    expect(shiftServiceDate('2026-12-30', 3)).toBe('2027-01-02')
+  })
+
+  it('rolls backward across a year boundary', () => {
+    expect(shiftServiceDate('2027-01-02', -3)).toBe('2026-12-30')
+  })
+
+  it('returns the same date for a zero-day shift', () => {
+    expect(shiftServiceDate('2026-09-06', 0)).toBe('2026-09-06')
+  })
+})
+
+describe('serviceDateWindow', () => {
+  it('returns a window bounded by SERVICE_DATE_PAST_DAYS and SERVICE_DATE_FUTURE_DAYS around the given date', () => {
+    const { min, max } = serviceDateWindow('2026-09-06')
+    expect(min).toBe(shiftServiceDate('2026-09-06', -SERVICE_DATE_PAST_DAYS))
+    expect(max).toBe(shiftServiceDate('2026-09-06', SERVICE_DATE_FUTURE_DAYS))
+  })
+
+  it('defaults to today when no date is passed', () => {
+    const { min, max } = serviceDateWindow()
+    expect(min).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(max).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+})
+
+describe('serviceDateWindowFor', () => {
+  it('returns the narrow VOLUNTEER window matching serviceDateWindow', () => {
+    const volunteerWindow = serviceDateWindowFor('VOLUNTEER', '2026-09-06')
+    const plainWindow = serviceDateWindow('2026-09-06')
+    expect(volunteerWindow).toEqual(plainWindow)
+  })
+
+  it('returns a much wider ADMIN window than the VOLUNTEER window', () => {
+    const volunteerWindow = serviceDateWindowFor('VOLUNTEER', '2026-09-06')
+    const adminWindow = serviceDateWindowFor('ADMIN', '2026-09-06')
+
+    expect(adminWindow.min).toBe(shiftServiceDate('2026-09-06', -ADMIN_SERVICE_DATE_PAST_DAYS))
+    expect(adminWindow.max).toBe(shiftServiceDate('2026-09-06', ADMIN_SERVICE_DATE_FUTURE_DAYS))
+    // The point of the ADMIN window is that it is meaningfully wider — not
+    // just technically different.
+    expect(adminWindow.min < volunteerWindow.min).toBe(true)
+    expect(adminWindow.max > volunteerWindow.max).toBe(true)
+  })
+
+  it('defaults to today when no date is passed', () => {
+    const { min, max } = serviceDateWindowFor('ADMIN')
+    expect(min).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(max).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 })

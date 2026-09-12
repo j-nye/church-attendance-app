@@ -13,6 +13,8 @@ import {
   updateEventScheduleSchema,
   idSchema,
   friendlyValidationMessage,
+  addServiceSchemaByRole,
+  addNamedServiceSchemaByRole,
 } from '@/lib/validation'
 import { todayServiceDate, formatServiceDate, formatServiceTime } from '@/lib/dates'
 
@@ -24,7 +26,7 @@ import { todayServiceDate, formatServiceDate, formatServiceTime } from '@/lib/da
  * dev build in a way nothing else catches (see src/lib/prisma-errors.ts for
  * why that helper lives outside this file instead of being a sibling export).
  */
-function autoTodayEventName(serviceDate: string, startTime: string): string {
+function autoServiceName(serviceDate: string, startTime: string): string {
   return `Service - ${formatServiceDate(serviceDate)} ${formatServiceTime(startTime)}`
 }
 
@@ -155,24 +157,34 @@ export async function getOrCreateTodayEvent(startTimeInput?: unknown) {
   }
 }
 
-export type TodayEventCollision = {
+export type ServiceCollision = {
   id: string
   name: string
+  serviceDate: string
   startTime: string
   isArchived: boolean
   isCountingDone: boolean
 }
 
-export type AddTodayEventResult =
+export type AddServiceResult =
   | { status: 'created'; event: Event }
-  | { status: 'collision'; existing: TodayEventCollision }
+  | { status: 'collision'; existing: ServiceCollision }
 
 /**
- * Lets ANY signed-in user add an ADDITIONAL service for today, once today
- * already has at least one — the gap getOrCreateTodayEvent deliberately
- * doesn't fill (it refuses outright once there's more than one service, by
- * design; see its doc comment). `serviceDate` is always todayServiceDate(),
- * never taken from input — this is a today-only operation.
+ * Add an ADDITIONAL service — the volunteer-reachable counterpart to the
+ * admin-only createEvent(). Any signed-in user may call this, but a
+ * VOLUNTEER's serviceDate is bounded to a rolling window
+ * (addServiceSchemaByRole) — that bound is what justifies requireUser()
+ * instead of requireAdmin() here: the blast radius of a mistake stays inside
+ * a window the volunteer can see and act within. An ADMIN gets no
+ * server-side bound at all, matching their existing unrestricted access via
+ * createEvent()/Settings — an admin who mis-dates a service can already fix
+ * it themselves via updateEventSchedule/archiveEvent, so the bound has
+ * nothing to buy them.
+ *
+ * The role used to select the schema comes from requireUser(), which
+ * re-reads the Allowlist on every call — it is never accepted from the
+ * client (no hidden role field, nothing echoed back through FormData).
  *
  * Two real services can legitimately land on the same clock time by
  * coincidence, so a collision on the derived [serviceDate, name] key is NOT
@@ -183,13 +195,12 @@ export type AddTodayEventResult =
  * guessing whether the collision means "same service, go there" or "a
  * second, different service happens to share a time", it returns a
  * discriminated result and lets the UI ask the volunteer directly.
- * addNamedTodayEvent is the continuation once they've answered "different".
+ * addNamedService is the continuation once they've answered "different".
  */
-export async function addTodayEvent(startTimeInput: unknown): Promise<AddTodayEventResult> {
-  await requireUser()
-  const startTime = startTimeSchema.parse(startTimeInput)
-  const serviceDate = todayServiceDate()
-  const name = autoTodayEventName(serviceDate, startTime)
+export async function addService(input: unknown): Promise<AddServiceResult> {
+  const user = await requireUser()
+  const { serviceDate, startTime } = addServiceSchemaByRole[user.role].parse(input)
+  const name = autoServiceName(serviceDate, startTime)
 
   try {
     const event = await prisma.event.create({ data: { name, serviceDate, startTime } })
@@ -210,6 +221,7 @@ export async function addTodayEvent(startTimeInput: unknown): Promise<AddTodayEv
       existing: {
         id: existing.id,
         name: existing.name,
+        serviceDate: existing.serviceDate,
         startTime: existing.startTime,
         isArchived: existing.isArchived,
         isCountingDone: existing.isCountingDone,
@@ -219,30 +231,28 @@ export async function addTodayEvent(startTimeInput: unknown): Promise<AddTodayEv
 }
 
 /**
- * The continuation of addTodayEvent once a human has confirmed "this is a
+ * The continuation of addService once a human has confirmed "this is a
  * genuinely different service" in response to a collision. Takes a
  * caller-supplied name instead of the derived one, so two same-time services
- * today can coexist under distinct names.
+ * on the same date can coexist under distinct names.
  *
  * The server-side re-check below (that a matching auto-named collision
  * actually exists) is deliberate, not defensive filler: without it, this
- * function would let a free-text name be created for ANY startTime, with no
- * real collision behind it — reopening exactly the "two plausible same-time
- * services" ambiguity the auto-naming rule exists to prevent, reachable by
- * calling this Server Action directly instead of through the UI's collision
- * step.
+ * function would let a free-text name be created for ANY serviceDate/
+ * startTime pair, with no real collision behind it — reopening exactly the
+ * "two plausible same-time services" ambiguity the auto-naming rule exists
+ * to prevent, reachable by calling this Server Action directly instead of
+ * through the UI's collision step.
  */
-export async function addNamedTodayEvent(startTimeInput: unknown, nameInput: unknown) {
-  await requireUser()
-  const startTime = startTimeSchema.parse(startTimeInput)
-  const { name } = createEventSchema.pick({ name: true }).parse({ name: nameInput })
-  const serviceDate = todayServiceDate()
+export async function addNamedService(input: unknown) {
+  const user = await requireUser()
+  const { serviceDate, startTime, name } = addNamedServiceSchemaByRole[user.role].parse(input)
 
   const collision = await prisma.event.findUnique({
-    where: { serviceDate_name: { serviceDate, name: autoTodayEventName(serviceDate, startTime) } },
+    where: { serviceDate_name: { serviceDate, name: autoServiceName(serviceDate, startTime) } },
   })
   if (!collision) {
-    throw new Error('There is no service at that time today to distinguish this from.')
+    throw new Error('There is no service at that time on that date to distinguish this from.')
   }
 
   const event = await prisma.event.create({ data: { name, serviceDate, startTime } })
@@ -251,25 +261,28 @@ export async function addNamedTodayEvent(startTimeInput: unknown, nameInput: unk
   return event
 }
 
-export type AddTodayEventFormState = {
+export type AddServiceFormState = {
   ok: boolean
   message?: string
   eventId?: string
-  collision?: TodayEventCollision
+  collision?: ServiceCollision
 }
 
 /**
- * useActionState-compatible wrapper around addTodayEvent(). No P2002 branch
- * here (unlike addNamedTodayEventAction below) — a collision on this path is
+ * useActionState-compatible wrapper around addService(). No P2002 branch
+ * here (unlike addNamedServiceAction below) — a collision on this path is
  * never an error, it's already surfaced as the `collision` result the UI
  * asks the volunteer about.
  */
-export async function addTodayEventAction(
-  _prevState: AddTodayEventFormState,
+export async function addServiceAction(
+  _prevState: AddServiceFormState,
   formData: FormData
-): Promise<AddTodayEventFormState> {
+): Promise<AddServiceFormState> {
   try {
-    const result = await addTodayEvent(formData.get('startTime'))
+    const result = await addService({
+      serviceDate: formData.get('serviceDate'),
+      startTime: formData.get('startTime'),
+    })
     if (result.status === 'collision') {
       return { ok: true, collision: result.existing }
     }
@@ -286,9 +299,9 @@ export async function addTodayEventAction(
 }
 
 /**
- * useActionState-compatible wrapper around addNamedTodayEvent(). Unlike
- * addTodayEventAction, this one DOES need a P2002 branch: the plain path's
- * collision is consumed by addTodayEvent's discriminated result before it
+ * useActionState-compatible wrapper around addNamedService(). Unlike
+ * addServiceAction, this one DOES need a P2002 branch: the plain path's
+ * collision is consumed by addService's discriminated result before it
  * can ever reach a P2002 here, but a duplicate on the *named* path is a
  * plain human mistake (typing the same distinguishing name twice) with no
  * fork to offer — so it maps to a friendly inline message like every other
@@ -299,12 +312,16 @@ export async function addTodayEventAction(
  * UI flow can trigger it (the naming form only ever appears after a real
  * collision was already surfaced).
  */
-export async function addNamedTodayEventAction(
-  _prevState: AddTodayEventFormState,
+export async function addNamedServiceAction(
+  _prevState: AddServiceFormState,
   formData: FormData
-): Promise<AddTodayEventFormState> {
+): Promise<AddServiceFormState> {
   try {
-    const event = await addNamedTodayEvent(formData.get('startTime'), formData.get('name'))
+    const event = await addNamedService({
+      serviceDate: formData.get('serviceDate'),
+      startTime: formData.get('startTime'),
+      name: formData.get('name'),
+    })
     return { ok: true, eventId: event.id }
   } catch (error) {
     if (error instanceof AuthzError) {
@@ -314,7 +331,7 @@ export async function addNamedTodayEventAction(
       return { ok: false, message: friendlyValidationMessage(error) }
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return { ok: false, message: 'A service with that name already exists today.' }
+      return { ok: false, message: 'A service with that name already exists on that date.' }
     }
     throw error
   }
@@ -354,8 +371,8 @@ export async function unarchiveEvent(input: unknown) {
  * accepts and corrects counts exactly like any other non-archived one —
  * saveCount continues to check isArchived only. This is dashboard
  * organization, not access control, which is why it's requireUser(), not
- * requireAdmin() like archiveEvent: any volunteer who can create today's
- * service (see addTodayEvent) can say they've finished counting it.
+ * requireAdmin() like archiveEvent: any volunteer who can create an
+ * additional service (see addService) can say they've finished counting it.
  */
 export async function markCountingDone(input: unknown) {
   await requireUser()
