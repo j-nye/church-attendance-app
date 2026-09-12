@@ -63,7 +63,7 @@ export function ConfirmDialog({
         </label>
 
         {status === 'error' && error && (
-          <p role="alert" style={{ color: 'var(--color-danger)', margin: 0 }}>
+          <p role="alert" className="alert-error">
             <span aria-hidden="true">⚠</span> {error}
           </p>
         )}

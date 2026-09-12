@@ -58,7 +58,10 @@ function RenameForm({ category, onDone }: { category: CategoryRowData; onDone: (
       <button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>
       <button type="button" onClick={onDone}>Cancel</button>
       {!state.ok && state.message && (
-        <p role="alert" style={{ color: 'var(--color-danger)', margin: 0, width: '100%' }}>{state.message}</p>
+        <p role="alert" className="alert-error" style={{ width: '100%' }}>
+          <span aria-hidden="true">⚠</span>
+          {state.message}
+        </p>
       )}
     </form>
   )
@@ -129,7 +132,10 @@ function CategoryRow({
       </div>
 
       {error && (
-        <p role="alert" style={{ color: 'var(--color-danger)', margin: 0, width: '100%' }}>{error}</p>
+        <p role="alert" className="alert-error" style={{ width: '100%' }}>
+          <span aria-hidden="true">⚠</span>
+          {error}
+        </p>
       )}
 
       {mode === 'editing' && (
@@ -183,7 +189,12 @@ function HiddenCategoryRow({ category }: { category: CategoryRowData }) {
     >
       <span>{category.name}</span>
       <button onClick={show} disabled={busy}>{busy ? 'Restoring…' : 'Show'}</button>
-      {error && <p role="alert" style={{ color: 'var(--color-danger)', margin: 0, width: '100%' }}>{error}</p>}
+      {error && (
+        <p role="alert" className="alert-error" style={{ width: '100%' }}>
+          <span aria-hidden="true">⚠</span>
+          {error}
+        </p>
+      )}
     </div>
   )
 }

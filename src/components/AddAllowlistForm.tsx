@@ -27,7 +27,7 @@ export function AddAllowlistForm() {
       {!state.ok && state.message && (
         <p
           role="alert"
-          style={{ color: 'var(--color-danger)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', margin: 0 }}
+          className="alert-error"
         >
           <span aria-hidden="true">⚠</span>
           {state.message}

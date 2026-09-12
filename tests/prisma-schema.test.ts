@@ -22,7 +22,7 @@ describe.skipIf(!hasDatabase)('schema constraints (live database)', () => {
 
   beforeAll(async () => {
     const event = await prisma.event.create({
-      data: { name: eventName, serviceDate: '2026-01-04' },
+      data: { name: eventName, serviceDate: '2026-01-04', startTime: '09:30' },
     })
     eventId = event.id
 

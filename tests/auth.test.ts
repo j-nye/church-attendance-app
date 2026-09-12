@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { handlers, auth, signIn, signOut, signInCallback } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -89,6 +89,131 @@ describe.skipIf(!hasDatabase)('signInCallback (allowlist gate, live database)', 
       profile: { email: activeEmail.toUpperCase(), email_verified: true, sub: rotatedSub },
     })
     expect(result).toBe(true)
+  })
+})
+
+describe.skipIf(!hasDatabase)('signInCallback (name sync from Google profile, live database)', () => {
+  const runId = `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const emails: string[] = []
+
+  async function createRow(
+    suffix: string,
+    data: {
+      name?: string | null
+      adminOverrideName?: string | null
+      googleSub?: string | null
+      isActive?: boolean
+    } = {},
+  ) {
+    const email = `${runId}-${suffix}@example.com`
+    emails.push(email)
+    await prisma.allowlist.create({ data: { email, isActive: true, ...data } })
+    return email
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  afterAll(async () => {
+    if (emails.length > 0) {
+      await prisma.allowlist.deleteMany({ where: { email: { in: emails } } })
+    }
+  })
+
+  it('writes the Google-reported name on a successful sign-in, combined with the googleSub bind into one update call', async () => {
+    const email = await createRow('new-name')
+    const updateSpy = vi.spyOn(prisma.allowlist, 'update')
+
+    const result = await signInCallback({
+      profile: { email, email_verified: true, sub: 'sub-new-name', name: 'Jane Volunteer' },
+    })
+
+    expect(result).toBe(true)
+    // Combined into the same update call as the googleSub bind, not two writes.
+    expect(updateSpy).toHaveBeenCalledTimes(1)
+
+    const row = await prisma.allowlist.findUniqueOrThrow({ where: { email } })
+    expect(row.name).toBe('Jane Volunteer')
+    expect(row.googleSub).toBe('sub-new-name')
+  })
+
+  it('writes nothing when the stored name and googleSub already match the profile (no pointless update)', async () => {
+    const email = await createRow('unchanged', { name: 'Same Name', googleSub: 'sub-unchanged' })
+    const updateSpy = vi.spyOn(prisma.allowlist, 'update')
+
+    const result = await signInCallback({
+      profile: { email, email_verified: true, sub: 'sub-unchanged', name: 'Same Name' },
+    })
+
+    expect(result).toBe(true)
+    expect(updateSpy).not.toHaveBeenCalled()
+  })
+
+  it('leaves an existing stored name untouched when the profile has no name', async () => {
+    const email = await createRow('no-name-in-profile', { name: 'Existing Name', googleSub: 'sub-no-name' })
+
+    const result = await signInCallback({
+      // Google did not return a `name` claim at all.
+      profile: { email, email_verified: true, sub: 'sub-no-name' },
+    })
+
+    expect(result).toBe(true)
+    const row = await prisma.allowlist.findUniqueOrThrow({ where: { email } })
+    expect(row.name).toBe('Existing Name')
+  })
+
+  it('updates the stored name when Google reports a changed name (no one-way latch)', async () => {
+    const email = await createRow('name-change', { name: 'Old Name', googleSub: 'sub-name-change' })
+
+    const result = await signInCallback({
+      profile: { email, email_verified: true, sub: 'sub-name-change', name: 'New Name' },
+    })
+
+    expect(result).toBe(true)
+    const row = await prisma.allowlist.findUniqueOrThrow({ where: { email } })
+    expect(row.name).toBe('New Name')
+  })
+
+  it('never writes adminOverrideName, even when the Google name differs from it', async () => {
+    const email = await createRow('override-untouched', {
+      name: 'Old Google Name',
+      adminOverrideName: 'Admin Corrected Name',
+      googleSub: 'sub-override',
+    })
+
+    const result = await signInCallback({
+      profile: { email, email_verified: true, sub: 'sub-override', name: 'Different Google Name' },
+    })
+
+    expect(result).toBe(true)
+    const row = await prisma.allowlist.findUniqueOrThrow({ where: { email } })
+    expect(row.name).toBe('Different Google Name')
+    expect(row.adminOverrideName).toBe('Admin Corrected Name')
+  })
+
+  it('does not write a name for a rejected sign-in (inactive allowlist row)', async () => {
+    const email = await createRow('rejected-inactive', { name: 'Existing Name', isActive: false })
+
+    const result = await signInCallback({
+      profile: { email, email_verified: true, sub: 'sub-rejected', name: 'Different Name' },
+    })
+
+    expect(result).toBe(false)
+    const row = await prisma.allowlist.findUniqueOrThrow({ where: { email } })
+    expect(row.name).toBe('Existing Name')
+  })
+
+  it('does not write a name for a rejected sign-in (email not on the allowlist)', async () => {
+    const email = `${runId}-not-on-list@example.com`
+
+    const result = await signInCallback({
+      profile: { email, email_verified: true, sub: 'sub-not-on-list', name: 'Anyone' },
+    })
+
+    expect(result).toBe(false)
+    const row = await prisma.allowlist.findUnique({ where: { email } })
+    expect(row).toBeNull()
   })
 })
 

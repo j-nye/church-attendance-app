@@ -197,12 +197,29 @@ session.user.name   // optional (not used here)
 
 ## Testing
 
-- **Unit tests:** 17 specs in Vitest — fast, run first
-- **E2E tests:** 2 specs in Playwright against next-auth — auth surface plus the counting flow
+- **Unit tests:** 18 files / ~284 specs in Vitest — fast, run first
+- **E2E tests:** 3 specs in Playwright against next-auth — auth surface, cross-role authorization, and the counting flow
 
 **The gap:** Counting logic (saveCount, getEventCounts) has only unit tests. E2E coverage is thin.
 
 **Running e2e locally uses a disposable database, not the real dev DB.** `.env.local` (and direnv's Doppler export in `.envrc`) point at the real Neon dev database — bare `npm run test:e2e` will write test fixtures (seeded allowlist rows, a real Event) into whatever database is currently active in your shell. Use `npm run test:e2e:local` instead: it starts a throwaway `postgres:16` Docker container (matching CI's service container, per the project's existing decision to use disposable Postgres rather than a Neon branch — see `docs/superpowers/plans/2026-08-31-roadmap.md`), and overrides `DATABASE_URL`/`DIRECT_URL`/`AUTH_SECRET` only in the spawned processes' env — never in a `.env` file, since a file-based override would be silently beaten by whatever direnv already exported into the shell. Requires Docker. `npm run db:test:down` stops the container when you're done.
+
+### Tests are not optional — for new features AND for changes to existing ones
+
+**Every behavior change ships with its tests in the same change.** Not in a follow-up, not "once it works". This applies equally to new features and to modifications of existing behavior — a change to working code is exactly where a silent regression hides.
+
+**New behavior — write the test first.** Add a failing test that encodes the new rule, then make it pass. Put it in the existing file that covers that module (`tests/actions-events.test.ts` for event actions, `tests/validation.test.ts` for schemas, and so on) — do not create a parallel test file for a module that already has one.
+
+**Changed behavior — find what you broke before you run the suite.** Before editing, grep the tests for the function, schema, or column you're about to change and read what they assert. Then, when something goes red:
+
+- **A contract changed** → rewrite the test to encode the *new* contract. Keep the coverage.
+- **Only a fixture is stale** (a newly-required field is missing) → add the field and leave the assertion alone.
+- **Never** loosen or delete a strict assertion to get to green. A dropped `toHaveBeenCalledWith`, a deleted case, or a widened matcher is a silently removed guarantee. If a test seems to be "in the way", assume the implementation is wrong until proven otherwise — especially for the authorization and session-derivation tests, which exist precisely to fail when someone weakens them.
+- **Watch for tests that pass for the wrong reason.** Adding a required field to a schema can make an unrelated test green via a different code path than the one it was written to check. Green is not the goal; green *for the stated reason* is.
+
+**Run the real-database tests, not just the mocked ones.** Most of the suite mocks Prisma. `tests/prisma-schema.test.ts` and `tests/auth.test.ts` hit a real database, so a schema change — a new NOT NULL column especially — can leave every mocked test green while CI goes red. A migration is a behavior change and needs its fixtures updated like any other.
+
+**Also update, when the behavior they describe changes:** the test's own name (a stale name teaches the next reader the wrong invariant), and any e2e selector that matches on user-visible text you just relabeled.
 
 **When writing tests:**
 - Unit: test Zod schemas, business logic, Prisma queries with mocks
@@ -273,6 +290,42 @@ src/
 
 ---
 
+## Deployment: Verify in Development Before Production
+
+**No application change reaches production without first running in the development environment.** Not a schema change, not a behavior change, not a "small" fix. This is a release rule, not a preference.
+
+### What the environments actually are
+
+| Environment | Database | Doppler config | Triggered by |
+|---|---|---|---|
+| Local dev | Neon `church-attendance-app-dev` | `dev` (via direnv) | `npm run dev` |
+| E2E | Disposable Docker Postgres | n/a (spawn-time override) | `npm run test:e2e:local` |
+| Vercel Preview | Neon `church-attendance-app-dev` | `dev` | pushing any non-`main` branch |
+| Vercel Production | Neon `church-attendance-app-prd` | `prd` | **merging to `main`** |
+
+Merging to `main` deploys to production. There is no separate promotion step, so the branch *is* the gate.
+
+### The required sequence
+
+1. **Local** — `npm run lint && npm test && npx tsc --noEmit`, plus `npm run security:sast`.
+2. **Real database** — if the change touches the schema, run the migration against the Neon dev database and confirm `tests/prisma-schema.test.ts` and `tests/auth.test.ts` pass. Mocked tests cannot see a migration.
+3. **E2E** — `npm run test:e2e:local` (disposable Postgres; never bare `npm run test:e2e`, which writes fixtures into whatever database your shell currently points at).
+4. **Preview deploy** — push the branch and exercise the change in the resulting Vercel Preview, which runs against the dev database.
+5. **Manual pass** — click through the actual changed flows in Preview, not just locally. Reports get printed; counts get entered on phones.
+6. **Only then** merge to `main`.
+
+### Why the Preview step is not optional
+
+Vercel's Build Command is `npx prisma migrate deploy && next build`. Migrations therefore run **during the build, while the previous deployment is still serving traffic** — so a migration and the code that depends on it are never live at the same instant. Preview is the only place that sequence gets rehearsed before it runs against production data.
+
+This is exactly why a migration that adds a `NOT NULL` column keeps its database default through the rollout and drops it in a later, separate migration: during the build window, the old code is still inserting rows without the new field. Expand in one release, contract in the next.
+
+### Production is not a test environment
+
+If something can only be verified in production, that is a gap to close, not a reason to skip ahead. Neon's backup retention on the production project is a documented, accepted risk — not a rollback plan (see `docs/superpowers/plans/2026-08-31-roadmap.md`).
+
+---
+
 ## Before Submitting
 
 - [ ] Read the schema comments — they encode business rules
@@ -280,5 +333,29 @@ src/
 - [ ] Check `isArchived` and `isActive` before mutations
 - [ ] Validate input with Zod — don't trust what comes in
 - [ ] Call `revalidatePath()` after mutations
-- [ ] Run `npm run lint && npm run test` — both must pass
+- [ ] Every behavior you added or changed has a test that fails without your change
+- [ ] You grepped the existing tests for what you touched, and updated them by rewriting to the new contract — not by loosening assertions
+- [ ] Run `npm run lint && npm run test && npx tsc --noEmit` — all three must pass
+- [ ] If your change touched the schema, the real-database tests (`tests/prisma-schema.test.ts`, `tests/auth.test.ts`) ran and passed — mocked tests can't see a migration
 - [ ] If you touch auth or counts, write an e2e test
+- [ ] Verified in the development environment — local suite, then a Vercel Preview deploy against the dev database — **before** anything merges to `main` and ships to production
+
+## UI & Styling (Mobile-First)
+
+This application is primarily used by volunteers on mobile devices (often in dim rooms). All UI decisions must prioritize large touch targets and unambiguous interactive elements over dense, information-heavy layouts.
+
+### 1. Semantic Elements: Buttons vs. Links
+- **`<button>`**: Use for ANY action that mutates data, submits a form, opens a modal/dialog, or changes the state of the current page. Never use a link for an action.
+- **`<Link>`**: Use strictly for navigating to a new URL or route (e.g., `/settings`, `/entry/[id]`). 
+
+### 2. Visual Hierarchy and Touch Targets
+- **Minimum Tap Target**: Interactive elements must respect the CSS variable `--tap-target: 44px` (defined in `tokens.css`). `<button>` tags automatically inherit this via `global.css`.
+- **Primary Navigational Actions**: If a `<Link>` is the primary call-to-action on a page (e.g., "Go to Settings" or "Start Counting"), it should not look like inline blue text. It must be visually styled as a button using a shared CSS class or inline variables (e.g., `background: var(--color-accent)`, `padding: var(--space-4)`) so it is large and tappable.
+- **Avoiding Text Links**: Because text links are hard to tap on mobile, prefer wrapping links in block-level elements or applying button-like padding (e.g., `padding: var(--space-3)`) even for secondary navigation.
+
+### 3. Styling Guidelines
+- The project does not use Tailwind. Use the CSS variables defined in `src/styles/tokens.css` (e.g., `var(--color-accent)`, `var(--space-4)`).
+- Buttons and button-like links should have `border-radius: var(--radius)` and appropriate contrast (e.g., `color: var(--color-accent-contrast)` against an accent background).
+
+### 4. Testing Semantic Roles
+- When writing E2E tests in Playwright, **always** select elements by their semantic role (e.g., `page.getByRole('button', { name: 'Save' })` or `page.getByRole('link', { name: 'Dashboard' })`). This inherently verifies that the correct HTML element was used. If a developer accidentally uses a `<Link>` for a submit action, `getByRole('button')` will fail, catching the error automatically.

@@ -18,12 +18,22 @@ export async function signInCallback({ profile }: { profile?: Profile }) {
   if (!entry || !entry.isActive) return false
 
   // Bind the row to the stable Google subject on first successful sign-in,
-  // so a later email change does not orphan the account.
+  // so a later email change does not orphan the account. Also re-sync the
+  // display name Google reports, on every sign-in, so a legitimate name
+  // change (marriage, correction) propagates. `adminOverrideName` is never
+  // touched here — it is an admin's manual correction, kept in its own
+  // column precisely so this unconditional re-sync of `name` can never
+  // clobber it. Both go through a single `update` call, issued only when
+  // something actually changed.
+  const data: { googleSub?: string; name?: string } = {}
   if (profile.sub && entry.googleSub !== profile.sub) {
-    await prisma.allowlist.update({
-      where: { email },
-      data: { googleSub: profile.sub },
-    })
+    data.googleSub = profile.sub
+  }
+  if (profile.name && entry.name !== profile.name) {
+    data.name = profile.name
+  }
+  if (Object.keys(data).length > 0) {
+    await prisma.allowlist.update({ where: { email }, data })
   }
 
   return true
