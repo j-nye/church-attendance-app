@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { SanctuaryMap } from '@/components/SanctuaryMap'
 import { CounterDialog } from '@/components/CounterDialog'
 import { SpeakerDialog } from '@/components/SpeakerDialog'
@@ -38,6 +39,7 @@ export function EntryClient({
   initialSpeakers: Speaker[]
   initialIsCountingDone: boolean
 }) {
+  const router = useRouter()
   const [counts, setCounts] = useState(initialCounts)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [speakers, setSpeakers] = useState(initialSpeakers)
@@ -49,6 +51,10 @@ export function EntryClient({
   // Same busy/error mechanics as ServiceCard's toggle and ServiceRow.unarchive
   // — a direct call inside its own try/catch, no useActionState wrapper. This
   // is reversible and blocks nothing, so no ConfirmDialog either.
+  //
+  // Marking done redirects to the dashboard — the natural next step is
+  // starting the next service. Reopening stays on this page: reopening
+  // almost always means "I need to keep counting here," not "take me away."
   async function toggleCountingDone() {
     setToggleBusy(true)
     setToggleError(null)
@@ -59,6 +65,7 @@ export function EntryClient({
       } else {
         await markCountingDone(eventId)
         setIsCountingDone(true)
+        router.push('/dashboard')
       }
     } catch {
       setToggleError('Could not update — please try again.')
