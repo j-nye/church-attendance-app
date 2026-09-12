@@ -108,6 +108,7 @@ export default async function ReportPage({ params }: { params: Promise<{ eventId
               <tr><td>Classrooms</td><td style={{ textAlign: 'right' }}>{totals.classrooms}</td></tr>
               <tr><td>Growth Track</td><td style={{ textAlign: 'right' }}>{totals.growthTrack}</td></tr>
               <tr><td>Serve Teams</td><td style={{ textAlign: 'right' }}>{totals.serveTeams}</td></tr>
+              <tr><td>Stage (Speakers)</td><td style={{ textAlign: 'right' }}>{totals.speakers}</td></tr>
               <tr style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>
                 <td>Total</td><td style={{ textAlign: 'right' }}>{totals.grand}</td>
               </tr>

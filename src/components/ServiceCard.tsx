@@ -195,6 +195,10 @@ export function ServiceCard({
                   <td style={{ color: 'var(--color-text-muted)' }}>Serve Teams</td>
                   <td style={{ textAlign: 'right', color: 'var(--color-text-muted)' }}>{totals.serveTeams}</td>
                 </tr>
+                <tr>
+                  <td style={{ color: 'var(--color-text-muted)' }}>Stage (Speakers)</td>
+                  <td style={{ textAlign: 'right', color: 'var(--color-text-muted)' }}>{totals.speakers}</td>
+                </tr>
                 <tr style={{ fontWeight: 700 }}>
                   <td>Total</td>
                   <td style={{ textAlign: 'right' }}>{totals.grand}</td>
