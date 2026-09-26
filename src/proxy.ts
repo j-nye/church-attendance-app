@@ -1,4 +1,11 @@
-import { auth } from '@/lib/auth'
+import NextAuth from 'next-auth'
+import { authConfig } from '@/lib/auth.config'
+
+// Builds its own NextAuth instance from the Prisma-free authConfig rather than
+// importing `auth` from '@/lib/auth' — that module also wires in the DB-backed
+// signIn callback, which would pull the Prisma engine into this function's
+// bundle even though the check below never touches the database.
+const { auth } = NextAuth(authConfig)
 
 /**
  * COSMETIC ONLY. This bounces signed-out visitors to /login so they do not see

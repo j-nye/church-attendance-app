@@ -1,15 +1,16 @@
 import { describe, it, expect, vi } from 'vitest'
 
-// proxy.ts calls `auth(handler)` from '@/lib/auth', where the real NextAuth
-// `auth` wraps `handler` in session-loading machinery we don't want to exercise
-// here. Mocking `auth` to just return its handler lets us call that inner
-// handler directly with a fake NextRequest-shaped object, isolating the
-// redirect-UX logic this file exists to test. This is the ONLY thing
-// src/proxy.ts is meant to do — see the file's own docstring: it is not
+// proxy.ts builds its own NextAuth instance (from the Prisma-free authConfig)
+// and calls `auth(handler)`, where the real NextAuth `auth` wraps `handler` in
+// session-loading machinery we don't want to exercise here. Mocking the
+// `next-auth` package's default export to just return its handler lets us
+// call that inner handler directly with a fake NextRequest-shaped object,
+// isolating the redirect-UX logic this file exists to test. This is the ONLY
+// thing src/proxy.ts is meant to do — see the file's own docstring: it is not
 // a security boundary, every Server Action re-checks via requireUser()/
 // requireAdmin() against the database regardless of what happens here.
-vi.mock('@/lib/auth', () => ({
-  auth: (handler: unknown) => handler,
+vi.mock('next-auth', () => ({
+  default: () => ({ auth: (handler: unknown) => handler }),
 }))
 
 function makeReq(pathname: string, authed: boolean) {
