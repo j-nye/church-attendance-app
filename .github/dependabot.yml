@@ -9,6 +9,11 @@ updates:
       default-days: 7
   - package-ecosystem: "github-actions"
     directory: "/"
+    groups:
+      # init and analyze must run the same codeql-action version
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
