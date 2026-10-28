@@ -2,6 +2,26 @@ version: 2
 updates:
   - package-ecosystem: "npm"
     directory: "/"
+    groups:
+      # react-dom peer-depends on the matching react version
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+      # @prisma/client must move in lockstep with prisma
+      prisma:
+        patterns:
+          - "prisma"
+          - "@prisma/client"
+    ignore:
+      # Majors handled by hand: eslint 10 waits on eslint-config-next peer
+      # support; prisma 7 is a migration (see dependency security plan).
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
