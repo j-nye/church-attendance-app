@@ -48,7 +48,7 @@
     "eslint-config-next": "^16.4.3",
     "husky": "^9.1.7",
     "prisma": "^6.19.3",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.2"
   }
