@@ -45,7 +45,7 @@
     "@vitest/coverage-v8": "^5.0.2",
     "dotenv": "^18.0.8",
     "eslint": "^9",
-    "eslint-config-next": "^16.4.3",
+    "eslint-config-next": "^16.4.5",
     "husky": "^9.1.7",
     "prisma": "^6.19.3",
     "tsx": "^4.23.15",
