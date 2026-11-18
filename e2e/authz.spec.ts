@@ -47,7 +47,7 @@ test('a VOLUNTEER can add a service, and re-adding the same date/time resolves v
   // routes to the SAME event created by the first add, proving the fork
   // resolves to the existing row rather than creating a second one.
   await page.getByRole('button', { name: `Go to ${TIME_LABEL} service` }).click()
-  await expect(page).toHaveURL(new RegExp(`/entry/${firstEventId}$`))
+  await expect(page).toHaveURL((url) => url.pathname === `/entry/${firstEventId}`)
 })
 
 test('a VOLUNTEER is refused a serviceDate outside the allowed window, with no service created', async ({
