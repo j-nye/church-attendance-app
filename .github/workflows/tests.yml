@@ -92,3 +92,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: semgrep scan --config=p/typescript --config=p/nextjs --config=p/javascript --error src/
+
+  # Uploads full results (SAST + supply chain) to the Semgrep platform so the
+  # dashboard reflects main. The PR-only app scan never refreshes main, which
+  # left fixed findings showing as open. Skips itself until the
+  # SEMGREP_APP_TOKEN repo secret exists.
+  semgrep-platform:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    env:
+      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: semgrep ci
+        if: env.SEMGREP_APP_TOKEN != ''
+        run: semgrep ci
