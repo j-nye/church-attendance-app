@@ -34,6 +34,9 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+      # Dependabot and local dev generate the lockfile with npm 11; Node 22 ships
+      # npm 10, which rejects it ("Missing: magicast@0.3.5"). Match the generator.
+      - run: npm install -g npm@11
       - run: npm ci
       - run: npm run lint
       - run: npm test
