@@ -187,7 +187,7 @@ session.user.name   // optional (not used here)
 
 ## Testing
 
-- **Unit tests:** 18 files / ~284 specs in Vitest — fast, run first
+- **Unit tests:** 19 files (2 need a real database and skip without one) / ~441 specs in Vitest — fast, run first
 - **E2E tests:** 3 specs in Playwright against next-auth — auth surface, cross-role authorization, and the counting flow
 
 **The gap:** Counting logic (saveCount, getEventCounts) has only unit tests. E2E coverage is thin.
@@ -224,6 +224,13 @@ Three tools, three different jobs. Don't conflate them — each catches somethin
 
 ### SAST — Semgrep
 Runs in CI (`.github/workflows/tests.yml`'s `semgrep` job: `p/typescript`, `p/nextjs`, `p/javascript` against `src/`), required check on `main`. Catches source-level bug patterns before anything runs. Local check: `npm run security:sast` — runs the exact same config so a local pass means the CI job will pass too.
+
+### Supply chain — Semgrep (dependencies)
+The `semgrep-platform` job in `tests.yml` runs `semgrep ci` on every push to `main` and uploads SAST + supply chain results to the Semgrep dashboard. The PR-only Semgrep app never rescans `main`, so without this job fixed findings stay "open". It skips itself if the `SEMGREP_APP_TOKEN` repo secret is missing; that secret is synced from the Doppler `ci` config (not `dev`/`prd`, which feed the app).
+
+**Fixing a finding:** try `npm audit fix`, then a direct bump. If a transitive dependency is pinned by its parent (e.g. `effect` via `@prisma/config`), add an entry to `overrides` in `package.json` rather than downgrading the parent.
+
+**Lockfile gotcha:** CI installs npm 11 (`npm install -g npm@11` in the `test` job) because Dependabot and local dev write lockfiles with npm 11, and Node 22's bundled npm 10 rejects them in `npm ci` ("Missing: magicast@0.3.5"). Node itself stays 22.x to match Vercel (`engines`). If Dependabot PRs suddenly fail at `npm ci`, suspect a npm version mismatch first.
 
 ### Secrets — gitleaks
 Already running (`gitleaks/gitleaks-action` in `tests.yml`), also a required check per the threat model (`docs/superpowers/plans/2026-08-31-threat-model.md`). Scans commit contents for things that look like credentials.
